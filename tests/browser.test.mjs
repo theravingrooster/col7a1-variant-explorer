@@ -472,6 +472,21 @@ test("protein and residue views share hover, keyboard focus and selected-region 
   const highlightedPaths = await schematic.locator('[data-schematic-highlight="true"]').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute("d"))).length);
   assert.ok(highlightedPaths > 0, "Map hover must illuminate a real part of the schematic");
   assert.equal(page.url(), initialURL, "Hover links the views without changing the cohort");
+  const nc1 = source.protein.domains.find(d => d.label === "NC1");
+  const diagramNC1 = schematic.getByRole("button", { name: "Select NC1 on protein schematic", exact: true });
+  await diagramNC1.focus();
+  await page.waitForFunction(range => {
+    const schematic = document.querySelector(".protein-schematic");
+    return schematic?.dataset.activeStart === String(range[0]) && schematic?.dataset.activeEnd === String(range[1]);
+  }, [nc1.start, nc1.end]);
+  await page.getByRole("button", { name: `Filter NC2, amino acids ${nc2.start} to ${nc2.end}`, exact: true }).hover();
+  assert.equal(await diagramNC1.evaluate(el => el === document.activeElement), true,
+    "Pointer hover on the map must not require blurring the schematic keyboard target");
+  await page.waitForFunction(range => {
+    const schematic = document.querySelector(".protein-schematic");
+    return schematic?.dataset.activeStart === String(range[0]) && schematic?.dataset.activeEnd === String(range[1]);
+  }, [nc2.start, nc2.end]);
+  assert.equal(page.url(), initialURL, "The newest linked hover takes precedence without filtering");
   await search().focus();
   await diagramNC2.focus();
   await page.waitForFunction(range => {
