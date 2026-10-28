@@ -505,6 +505,61 @@ test("density stacks and legend show current significance counts before and afte
   assert.ok(await page.locator("[data-marker]").count() > 0, "Zoom exposes individual variant markers");
 });
 
+test("map evidence stays below the chart while adjacent density bars remain reachable", async () => {
+  const map = page.getByRole("group", { name: "Interactive COL7A1 protein map", exact: true });
+  const bins = page.locator("[data-bin]");
+  const firstIndex = Math.floor((await bins.count()) / 2);
+  const first = bins.nth(firstIndex), next = bins.nth(firstIndex + 1);
+  const tooltip = page.getByRole("tooltip");
+  assert.equal(await page.locator(".map-evidence-slot").count(), 1,
+    "The evidence dock must exist before hover so showing evidence cannot move the chart");
+  await map.scrollIntoViewIfNeeded();
+  const beforeHover = await map.boundingBox();
+  await first.hover();
+  await tooltip.waitFor();
+
+  async function expectDockedEvidence() {
+    const chart = await map.boundingBox(), evidence = await tooltip.boundingBox();
+    assert.ok(chart && evidence, "Both the chart and its evidence must be rendered");
+    assert.ok(evidence.y >= chart.y + chart.height - 1,
+      "Hover evidence must stay below the SVG instead of covering neighboring bars or domains");
+    assert.ok(Math.abs(chart.y - beforeHover.y) <= 1 && Math.abs(chart.height - beforeHover.height) <= 1,
+      "Showing or updating evidence must not shift or resize the chart");
+  }
+  await expectDockedEvidence();
+  const highlight = await page.locator(".map-linked-highlight").evaluate(mark => {
+    const bounds = mark.getBBox();
+    return { y: bounds.y, height: bounds.height };
+  });
+  assert.ok(highlight.height > 0 && highlight.height <= 10,
+    "Linked residues need a compact indicator, not a full-height column");
+  assert.ok(highlight.y >= 109 && highlight.y + highlight.height < 135,
+    "The indicator belongs in the residue-axis strip, away from domain rows and density bars");
+
+  const firstLabel = await first.getAttribute("aria-label");
+  const nextLabel = await next.getAttribute("aria-label");
+  assert.notEqual(nextLabel, firstLabel);
+  const [, start, end, total] = nextLabel.match(/amino acids (\d+) to (\d+), (\d+) variants/);
+  const nextPoint = await next.evaluate(bin => {
+    const bounds = bin.getBoundingClientRect();
+    const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+    return { x, y, hit: document.elementFromPoint(x, y)?.closest("[data-bin]")?.dataset.bin,
+      expected: bin.dataset.bin };
+  });
+  assert.equal(nextPoint.hit, nextPoint.expected,
+    "An open evidence panel must not intercept pointer events for the neighboring bar");
+  await page.mouse.move(nextPoint.x, nextPoint.y);
+  await page.waitForFunction(({ start, end }) => {
+    const evidence = document.getElementById("map-evidence-tooltip")?.textContent;
+    return evidence?.includes(`aa ${Number(start).toLocaleString("en-US")}–${Number(end).toLocaleString("en-US")}`);
+  }, { start, end });
+  assert.ok((await tooltip.innerText()).includes(`${Number(total).toLocaleString("en-US")} variants counted`),
+    "Moving directly to the adjacent bar must update its count and residue range");
+  await expectDockedEvidence();
+  assert.equal(await next.getAttribute("aria-describedby"), "map-evidence-tooltip",
+    "The newly inspected bar must describe the same evidence available to keyboard users");
+});
+
 test("protein and residue views share hover, keyboard focus and selected-region filters", async () => {
   const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
   const nc2 = source.protein.domains.find(d => d.label === "NC2");

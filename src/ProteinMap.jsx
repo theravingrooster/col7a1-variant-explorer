@@ -37,8 +37,8 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
   const markersShown = markerMode && modePreference !== "density";
   const [hovered, setHovered] = useState(null);
   const [schematicHover, setSchematicHover] = useState(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ left: 20, top: 20 });
   const mapRef = useRef(null);
+  const evidenceRef = useRef(null);
   const restoreMapFocus = useRef(false);
   const hideTimer = useRef(null);
   const [focused, setFocused] = useState(0);
@@ -73,46 +73,29 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
     }
   }, [start, end, variants, markersShown]);
   useEffect(() => () => clearTimeout(hideTimer.current), []);
+  useEffect(() => { if (evidenceRef.current) evidenceRef.current.scrollTop = 0; }, [hovered]);
   useEffect(() => {
     if (!hovered) return;
-    const inTooltip = event => event.target?.closest?.("#map-evidence-tooltip");
     const dismiss = event => {
-      if (event.key === "Escape" || (["PageUp", "PageDown"].includes(event.key) && !inTooltip(event))) {
+      if (event.key === "Escape") {
         clearTimeout(hideTimer.current); setHovered(null);
       }
     };
-    const dismissOnScroll = event => { if (!hovered.keyboard && !inTooltip(event)) setHovered(null); };
-    const dismissOnManualScroll = event => { if (!inTooltip(event)) setHovered(null); };
-    const dismissOnResize = () => setHovered(null);
     document.addEventListener("keydown", dismiss);
-    window.addEventListener("scroll", dismissOnScroll, true);
-    window.addEventListener("wheel", dismissOnManualScroll, { passive: true });
-    window.addEventListener("touchmove", dismissOnManualScroll, { passive: true });
-    window.addEventListener("resize", dismissOnResize);
-    return () => {
-      document.removeEventListener("keydown", dismiss);
-      window.removeEventListener("scroll", dismissOnScroll, true);
-      window.removeEventListener("wheel", dismissOnManualScroll);
-      window.removeEventListener("touchmove", dismissOnManualScroll);
-      window.removeEventListener("resize", dismissOnResize);
-    };
+    return () => document.removeEventListener("keydown", dismiss);
   }, [hovered]);
   function reveal(item, event) {
     clearTimeout(hideTimer.current);
-    if (event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const width = Math.min(300, window.innerWidth - 24);
-      setTooltipPosition({
-        left: Math.max(12, Math.min(window.innerWidth - width - 12, rect.left)),
-        top: Math.max(12, Math.min(rect.bottom + 12, window.innerHeight - Math.min(310, window.innerHeight * .65) - 12)),
-      });
-    }
     setSchematicHover(null);
     setHovered({ ...item, keyboard: event?.type === "focus" });
   }
   function hideAfterPointerLeaves() {
     clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setHovered(null), 100);
+    hideTimer.current = setTimeout(() => setHovered(current =>
+      current?.keyboard || evidenceRef.current?.contains(document.activeElement) ? current : null), 100);
+  }
+  function leaveMapTarget(event) {
+    if (!event.relatedTarget?.closest?.(".map-evidence-slot")) setHovered(null);
   }
   function chooseDomain(domain) {
     onFilter("domain", filters.domain === domain.id ? "" : domain.id);
@@ -149,8 +132,8 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
       role: "button", tabIndex: 0, "aria-pressed": filters.domain === d.id,
       "aria-label": `Filter ${d.label}, amino acids ${d.start} to ${d.end}`,
       "aria-describedby": hovered?.kind === "region" && hovered.id === d.id ? tooltipDescription : undefined,
-      onMouseEnter: e => reveal({ kind: "region", id: d.id }, e), onMouseLeave: hideAfterPointerLeaves,
-      onFocus: e => reveal({ kind: "region", id: d.id }, e), onBlur: () => setHovered(null),
+      onMouseEnter: e => reveal({ kind: "region", id: d.id }, e),
+      onFocus: e => reveal({ kind: "region", id: d.id }, e), onBlur: leaveMapTarget,
       onClick: () => chooseDomain(d),
       onKeyDown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); chooseDomain(d); } },
     };
@@ -165,7 +148,7 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
     <div className="protein-explorer-grid">
       <ProteinSchematic protein={protein} activeRange={activeRange} selectedDomain={filters.domain}
         onRegionHover={domain => { clearTimeout(hideTimer.current); setHovered(null); setSchematicHover(domain); }} onRegionSelect={chooseDomain} />
-      <div className="residue-workspace">
+      <div className="residue-workspace" onMouseEnter={() => clearTimeout(hideTimer.current)} onMouseLeave={hideAfterPointerLeaves}>
         <div className="residue-heading"><div><h3>Residue map</h3><p>{selectedRegion?.label || (zoomed ? "Selected range" : "Full protein")} <span>· aa {num(start)}–{num(end)}</span></p></div>
           {zoomed && <button className="text-button" onClick={resetRegion}>Reset map region</button>}
         </div>
@@ -188,7 +171,7 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
           <div className="map-scroll" role="region" aria-label="Protein distribution map; scroll horizontally to inspect all residues" tabIndex={0}>
             <svg ref={mapRef} className="protein-map" role="group" viewBox={`0 0 900 ${plotBottom + 34}`} aria-label="Interactive COL7A1 protein map" aria-describedby="map-instructions">
               <text x={X} y="15" className="svg-caption">Protein regions</text>
-              {activeRange && activeRange[0] <= end && activeRange[1] >= start && <rect data-linked-range={`${activeRange[0]}-${activeRange[1]}`} data-start={activeRange[0]} data-end={activeRange[1]} className="map-linked-highlight" x={x(Math.max(start, activeRange[0]))} y="25" width={Math.max(3, (Math.min(end, activeRange[1]) - Math.max(start, activeRange[0]) + 1) / span * WIDTH)} height={plotBottom - 25} rx="3" />}
+              {activeRange && activeRange[0] <= end && activeRange[1] >= start && <rect aria-hidden="true" data-linked-range={`${activeRange[0]}-${activeRange[1]}`} data-start={activeRange[0]} data-end={activeRange[1]} className="map-linked-highlight" x={x(Math.max(start, activeRange[0]))} y="112" width={Math.max(3, (Math.min(end, activeRange[1]) - Math.max(start, activeRange[0]) + 1) / span * WIDTH)} height="6" rx="2" />}
               {regions.filter(d => d.start <= end && d.end >= start).map(d => {
                 const left = x(Math.max(start, d.start)), width = (Math.min(end, d.end) - Math.max(start, d.start) + 1) / span * WIDTH;
                 return <g key={d.id} {...regionInteraction(d)} className={`domain-block ${inLinkedRange(d) ? "is-linked" : ""}`}>
@@ -213,8 +196,8 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
                   className={`map-variant-marker ${selected?.variationId === v.variationId ? "is-selected" : ""}`}
                   aria-label={`Open variant ${v.variationId}: ${v.proteinHgvs.join(" / ") || v.codingHgvs.join(" / ")}, ${significance(v)}`}
                   aria-describedby={hovered?.kind === "marker" && hovered.index === index ? tooltipDescription : undefined}
-                  onMouseEnter={e => reveal({ kind: "marker", index }, e)} onMouseLeave={hideAfterPointerLeaves}
-                  onFocus={e => { reveal({ kind: "marker", index }, e); setFocused(index); }} onBlur={() => setHovered(null)}
+                  onMouseEnter={e => reveal({ kind: "marker", index }, e)}
+                  onFocus={e => { reveal({ kind: "marker", index }, e); setFocused(index); }} onBlur={leaveMapTarget}
                   onClick={() => onSelect(v)} onKeyDown={e => navigate(e, index, "marker", () => onSelect(v))}>
                   <rect x={cx - 10} y={cy - 8} width={Math.max(20, marker.endX - marker.x + 20)} height="16" fill="transparent" />
                   {marker.endX > marker.x && <line x1={cx} x2={X + marker.endX} y1={cy} y2={cy} stroke={color(v.significanceGroup)} strokeWidth="3" />}
@@ -229,8 +212,8 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
                   aria-label={`Filter amino acids ${bin.start} to ${bin.end}, ${bin.total} variants${MAP_GROUPS.filter(key => bin.counts[key] > 0).map(key => `; ${GROUPS[key].label}: ${bin.counts[key]}`).join("")}`}
                   aria-describedby={hovered?.kind === "bin" && hovered.index === index ? tooltipDescription : undefined}
                   onClick={() => chooseBin(bin)} onKeyDown={e => navigate(e, index, "bin", () => chooseBin(bin))}
-                  onMouseEnter={e => reveal({ kind: "bin", index }, e)} onMouseLeave={hideAfterPointerLeaves}
-                  onFocus={e => { reveal({ kind: "bin", index }, e); setFocused(index); }} onBlur={() => setHovered(null)}>
+                  onMouseEnter={e => reveal({ kind: "bin", index }, e)}
+                  onFocus={e => { reveal({ kind: "bin", index }, e); setFocused(index); }} onBlur={leaveMapTarget}>
                   <rect x={barX} y={PLOT_TOP} width={barWidth + 3} height={plotBottom - PLOT_TOP} fill="transparent" />
                   {MAP_GROUPS.map(key => {
                     const height = bin.counts[key] / max * (plotBottom - PLOT_TOP); cumulative += height;
@@ -251,25 +234,32 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
           </li>)}</ul>
         </div>
         <div className="map-context-line"><span className="map-context-dot" aria-hidden="true" />{linkedPosition ? <span>{schematicHover?.label || (hovered?.kind === "region" ? hoveredItem?.label : "Linked residues")} · aa {num(linkedPosition.start)}–{num(linkedPosition.end)}</span> : <span>Hover a region to highlight it in both views.</span>}</div>
+        <div ref={evidenceRef} className="map-evidence-slot" role="region" aria-label="Map hover details" tabIndex={0}
+          onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setHovered(null); }}>
+          {hoveredItem ? <div className="map-evidence-tooltip" id="map-evidence-tooltip" role="tooltip">
+            <div className="map-evidence-overview">
+              <p className="eyebrow">{hovered.kind === "marker" ? "VARIANT EVIDENCE" : "REGION EVIDENCE"}</p>
+              {hovered.kind === "marker" ? <><strong>{positionLabel(hoveredItem.variant.proteinMapping)}</strong>
+                <p className="map-tooltip-note">Select the marker to open the full evidence.</p>
+                {(hoveredItem.clippedStart || hoveredItem.clippedEnd) && <p className="map-tooltip-note">Reported interval extends beyond this view.</p>}</>
+                : <><strong>{hovered.kind === "region" ? `${hoveredItem.label} · ` : ""}aa {num(hoveredItem.start)}–{num(hoveredItem.end)}</strong>
+                  <p className="map-tooltip-note">{num(hoveredItem.total)} {hovered.kind === "region" ? "matching variants" : "variants counted"} · Select to focus</p>
+                  {hovered.kind === "bin" && <dl className="map-count-breakdown" aria-label="Clinical significance counts">{MAP_GROUPS.filter(key => hoveredItem.counts[key] > 0).map(key => <div key={key}>
+                    <dt><i aria-hidden="true" style={{ background: color(key) }} />{legendLabels[key]}</dt><dd>{num(hoveredItem.counts[key])}</dd>
+                  </div>)}</dl>}
+                  {hoveredItem.total > 1 && <p className="map-tooltip-note">Example 1 of {num(hoveredItem.total)} shown. Select the region for all records.</p>}
+                </>}
+            </div>
+            {hovered.kind === "marker" ? <VariantPreview variant={hoveredItem.variant} /> : hoveredItem.samples.slice(0, 1).map(v => <VariantPreview key={v.variationId} variant={v} />)}
+          </div> : <div className="map-evidence-empty"><strong>Inspect a region or variant</strong><span>Hover or use keyboard focus on the map. Evidence appears here, keeping nearby variants clear.</span></div>}
+        </div>
         <div className="map-summary"><span><strong>{num(visible.length)}</strong> mapped variants <span className="muted">/ {num(variants.length)} results</span></span>
           <button className="text-button map-unmapped" onClick={showUnmapped} aria-label={filters.mapping === "unmapped" ? "Include mapped variants" : "Show unmapped variants"} aria-pressed={filters.mapping === "unmapped"}>{filters.mapping === "unmapped" ? "Include mapped variants" : `${num(variants.length - mapped.length)} without protein mapping`}</button>
         </div>
       </div>
     </div>
-    {hoveredItem && <div className="map-evidence-tooltip" style={tooltipPosition} id="map-evidence-tooltip" role="tooltip" onMouseEnter={() => clearTimeout(hideTimer.current)} onMouseLeave={hideAfterPointerLeaves}>
-      {hovered.kind === "marker" ? <><p className="eyebrow">VARIANT EVIDENCE · SELECT TO OPEN</p><VariantPreview variant={hoveredItem.variant} />
-        {(hoveredItem.clippedStart || hoveredItem.clippedEnd) && <p className="map-tooltip-note">Reported interval extends beyond this view.</p>}</>
-        : <><strong>{hovered.kind === "region" ? `${hoveredItem.label} · ` : ""}aa {num(hoveredItem.start)}–{num(hoveredItem.end)}</strong>
-          <p className="map-tooltip-note">{num(hoveredItem.total)} {hovered.kind === "region" ? "matching variants" : "variants counted"} · Select to focus</p>
-          {hovered.kind === "bin" && <dl className="map-count-breakdown" aria-label="Clinical significance counts">{MAP_GROUPS.filter(key => hoveredItem.counts[key] > 0).map(key => <div key={key}>
-            <dt><i aria-hidden="true" style={{ background: color(key) }} />{legendLabels[key]}</dt><dd>{num(hoveredItem.counts[key])}</dd>
-          </div>)}</dl>}
-          {hoveredItem.samples.slice(0, 1).map(v => <VariantPreview key={v.variationId} variant={v} />)}
-          {hoveredItem.total > 1 && <p className="map-tooltip-note">Example 1 of {num(hoveredItem.total)}. Open the region for all records.</p>}
-        </>}
-    </div>}
     <details className="map-reading-notes"><summary>How to read this map</summary><div>
-      <p id="map-instructions">Each dot is one variant; horizontal lines show reported spans. Stacked bars show counts by clinical significance, with total height showing all variants in a bin. VUS means uncertain significance; pathogenic and benign groups each include their likely classifications. Density counts each variant once at its first reported residue, or the left edge when its interval crosses into view. Filters use interval overlap. Frameshifts show only their reported anchor. Use left/right arrows, Home/End, and Enter to explore; Escape dismisses the tooltip.</p>
+      <p id="map-instructions">Each dot is one variant; horizontal lines show reported spans. Stacked bars show counts by clinical significance, with total height showing all variants in a bin. VUS means uncertain significance; pathogenic and benign groups each include their likely classifications. Density counts each variant once at its first reported residue, or the left edge when its interval crosses into view. Filters use interval overlap. Frameshifts show only their reported anchor. The short indicator beneath the subdomains marks the linked residues; evidence appears below the chart. Use left/right arrows, Home/End, and Enter to explore; Escape clears the hover details.</p>
       <p>Mapping uses explicit protein HGVS linked to Q02388-1 with endpoint residues checked against its sequence. Domain boundaries are 1-based, inclusive UniProt intervals. The sequence map includes the signal peptide; the rotating schematic depicts the mature homotrimer without it. Domain overlap does not establish clinical effect.</p>
     </div></details>
   </section>;
