@@ -15,7 +15,7 @@ const ids = () => page.locator("tbody .clinvar-link").allTextContents();
 const multipleSubmittersReview = "criteria provided, multiple submitters, no conflicts";
 async function openFilters() {
   const details = page.locator("details").filter({
-    has: page.getByLabel("Clinical significance", { exact: true }),
+    has: page.getByRole("combobox", { name: "Clinical significance", exact: true }),
   });
   if (await details.count() && await details.getAttribute("open") === null)
     await details.locator("summary").click();
@@ -126,12 +126,12 @@ test("clinical summary shows exact source counts and toggles the table classific
   assert.equal(await notReported.locator(".chart-count").innerText(), "38");
   await pathogenic.click();
   await expectCount(674);
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "Pathogenic");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "Pathogenic");
   assert.equal(await pathogenic.getAttribute("aria-pressed"), "true");
   assert.ok((await page.locator("tbody .badge").allTextContents()).every(label => label.trim() === "Pathogenic"));
   await pathogenic.click();
   await expectCount(source.summary.variants);
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "");
   assert.equal(await pathogenic.getAttribute("aria-pressed"), "false");
 });
 
@@ -144,13 +144,13 @@ test("a grouped domain/classification bar applies both filters and clears the se
   await pair.click();
   await expectCount(25);
   assert.equal(await page.getByLabel("Protein domain", { exact: true }).inputValue(), nc2);
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "Pathogenic");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "Pathogenic");
   assert.equal(await pair.getAttribute("aria-pressed"), "true");
   assert.deepEqual((await ids()).map(x => Number(x.replace(/\D/g, ""))), expected.map(v => v.variationId));
   await pair.click();
   await expectCount(source.summary.variants);
   assert.equal(await page.getByLabel("Protein domain", { exact: true }).inputValue(), "");
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "");
   assert.equal(await pair.getAttribute("aria-pressed"), "false");
 });
 
@@ -183,12 +183,12 @@ test("Not reported is filterable and its missing-classification state survives r
     .getByRole("button", { name: "Filter Not reported: 38 variants in current results", exact: true });
   await notReported.click();
   await expectCount(38);
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "__not_classified__");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "__not_classified__");
   assert.ok((await page.locator("tbody .badge").allTextContents()).every(label => label.trim() === "Not classified"));
   await page.waitForFunction(() => new URLSearchParams(location.search).get("significance") === "__not_classified__");
   await page.reload({ waitUntil: "networkidle" });
   await expectCount(38);
-  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "__not_classified__");
+  assert.equal(await page.getByRole("combobox", { name: "Clinical significance", exact: true }).inputValue(), "__not_classified__");
   assert.equal(await notReported.getAttribute("aria-pressed"), "true");
   await notReported.click();
   await expectCount(source.summary.variants);
@@ -285,6 +285,9 @@ test("a variant marker exposes hover and keyboard evidence and opens the full re
   assert.match(await tooltip.innerText(), /p\.Met2798Lys/);
   assert.match(await tooltip.innerText(), /Pathogenic/);
   assert.match(await tooltip.innerText(), /multiple submitters, no conflicts/);
+  await search().focus();
+  await page.keyboard.press("Escape");
+  await tooltip.waitFor({ state: "hidden" });
   await marker.focus();
   assert.equal(await tooltip.isVisible(), true);
   await marker.press("Escape");

@@ -243,33 +243,6 @@ function Explorer({ data }) {
         <p className="snapshot-note"><strong>Fixed snapshot · Prepared {data.snapshot?.preparedDate || "date not recorded"}</strong>
           <span> ClinVar release date: {data.sources.clinvar.releaseDate || "unknown"}. UniProt annotation: {data.protein.entryAudit.lastAnnotationUpdateDate}. No automatic refresh.</span>
         </p>
-        <section className="stats compact-stats" aria-label="Dataset overview">
-          <div>
-            <span>Unique variants</span>
-            <strong>{num(data.summary.variants)}</strong>
-            <small>{num(data.summary.sourceRows)} ClinVar source rows</small>
-          </div>
-          <div>
-            <span>Mapped to protein</span>
-            <strong>{num(data.summary.mapped)}</strong>
-            <small>Explicit HGVS + residue match</small>
-          </div>
-          <div>
-            <span>Without protein mapping</span>
-            <strong>{num(data.summary.unmapped)}</strong>
-            <small>Retained in the table</small>
-          </div>
-          <div>
-            <span>Annotated subdomains</span>
-            <strong>
-              {data.protein.domains
-                .filter((d) => d.level === "subdomain")
-                .length.toString()
-                .padStart(2, "0")}
-            </strong>
-            <small>Plus NC1, collagenous & NC2 regions</small>
-          </div>
-        </section>
           <section className="panel workspace-controls" aria-labelledby="filters-title">
             <h2 id="filters-title" className="sr-only">Filter the research workspace</h2>
             <label className="search">
@@ -285,7 +258,7 @@ function Explorer({ data }) {
               />
               <kbd>/</kbd>
             </label>
-            <p className="search-help" id="search-help">Search HGVS, rsIDs, conditions, or coordinates. Use <code>id:17423</code> for an exact variant ID, or <code>GRCh38 chr3:48566281</code> for a genomic position. Share this page’s URL to preserve your filters and selected evidence.</p>
+            <p className="search-help sr-only" id="search-help">Search HGVS, rsIDs, conditions, or coordinates. Use <code>id:17423</code> for an exact variant ID, or <code>GRCh38 chr3:48566281</code> for a genomic position. Share this page’s URL to preserve your filters and selected evidence.</p>
             <div className="quick-filters">
               <span className="workspace-result-count" aria-live="polite"><strong>{num(results.length)}</strong> matching variants</span>
               <button className="evidence-preset" aria-pressed={filters.review === MULTIPLE_SUBMITTERS_REVIEW}
@@ -358,6 +331,33 @@ function Explorer({ data }) {
           selected={selected}
           onSelect={setSelected}
         />
+        <section className="stats compact-stats" aria-label="Dataset overview">
+          <div>
+            <span>Unique variants</span>
+            <strong>{num(data.summary.variants)}</strong>
+            <small>{num(data.summary.sourceRows)} ClinVar source rows</small>
+          </div>
+          <div>
+            <span>Mapped to protein</span>
+            <strong>{num(data.summary.mapped)}</strong>
+            <small>Explicit HGVS + residue match</small>
+          </div>
+          <div>
+            <span>Without protein mapping</span>
+            <strong>{num(data.summary.unmapped)}</strong>
+            <small>Retained in the table</small>
+          </div>
+          <div>
+            <span>Annotated subdomains</span>
+            <strong>
+              {data.protein.domains
+                .filter((d) => d.level === "subdomain")
+                .length.toString()
+                .padStart(2, "0")}
+            </strong>
+            <small>Plus NC1, collagenous & NC2 regions</small>
+          </div>
+        </section>
         <div className="panel visual-summary-panel">
           <VisualSummary variants={results} allVariants={variants} protein={data.protein}
             filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} onClear={clear} />

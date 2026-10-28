@@ -49,3 +49,5 @@ Scope: deployed COL7A1 explorer, React UI, search/filter/export logic, protein/s
 - Enriched filtered CSV with submitter counts and snapshot/mapping provenance.
 - 72 unit/regression tests pass; production build and complete committed-snapshot verification pass (13,036 rows; 6,522 variants; 4,268 mappings).
 - Browser regression suite expanded to 20 cases. The local browser process remains unavailable in this execution environment; hosted browser interaction is checked separately.
+
+Hosted preview verified: exact 928-record no-conflicts preset; NC2 (225) and NC2+Pathogenic (25) filtering; residues 2790–2810 (26 markers) and invalid-range recovery; keyboard marker tooltip and evidence dialog; explicit 2,254-record unmapped access; URL/theme reload; light/dark map and detail rendering. Downloaded CSVs were parsed and checked against all expected IDs for the 26-record range and the 928-record multi-page review cohort, including source submitter counts and dates.
