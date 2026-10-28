@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { EMPTY_FILTERS } from "../src/data-utils.mjs";
+import { UNCLASSIFIED } from "../src/chart-data.mjs";
 import {
   EXPLORER_PAGE_SIZE,
   MAX_SEARCH_LENGTH,
@@ -14,6 +15,11 @@ const data = JSON.parse(
 );
 const defaults = () => ({ filters: { ...EMPTY_FILTERS }, sort: "id", page: 0, selectedId: null });
 const read = (search) => readExplorerState(search, data);
+
+test("missing-classification chart selection survives a shared URL", () => {
+  const state = { ...defaults(), filters: { ...EMPTY_FILTERS, significance: UNCLASSIFIED } };
+  assert.deepEqual(read(`?${writeExplorerState(state)}`), state);
+});
 
 test("empty state restores defaults and serializes to a clean URL", () => {
   assert.deepEqual(read(""), defaults());

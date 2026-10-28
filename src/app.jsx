@@ -13,6 +13,11 @@ import {
   variantsCsv,
 } from "./data-utils.mjs";
 import "./styles.css";
+import "./charts.css";
+import "./theme.css";
+import ThemeToggle from "./ThemeToggle.jsx";
+import VisualSummary from "./VisualSummary.jsx";
+import { UNCLASSIFIED } from "./chart-data.mjs";
 import { validateDataset } from "./dataset-validation.mjs";
 import { readExplorerState, writeExplorerState, EXPLORER_PAGE_SIZE as PAGE_SIZE, MAX_SEARCH_LENGTH } from "./explorer-state.mjs";
 
@@ -59,7 +64,8 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
   const [hovered, setHovered] = useState(null);
   const [focusedBin, setFocusedBin] = useState(0);
   const hoveredBin = hovered === null ? null : bins[hovered];
-  const x = (n) => 20 + ((n - 1) / protein.length) * 1100;
+  const plotWidth = 1066;
+  const x = (n) => 54 + ((n - 1) / protein.length) * plotWidth;
   const regions = protein.domains.filter((d) => d.level !== "subdomain");
   const subdomains = protein.domains.filter((d) => d.level === "subdomain");
   function activateBin(bin) {
@@ -88,29 +94,42 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
             / {num(variants.length - mapped)} unmapped
           </span>
         </span>
-        <span className="mono">{num(protein.length)} amino acids</span>
+        <span className="mono">{num(protein.length)} amino acids · 1-based positions</span>
+        {filters.range && <button className="map-range-clear" onClick={() => onFilter("range", null)}>Clear selected range: aa {filters.range.join("–")}</button>}
       </div>
-      <div className="map-scroll">
+      <div className="map-region-guide" aria-label="Protein region filters">
+        {regions.map(d => <button key={d.id} aria-pressed={filters.domain === d.id}
+          onClick={() => onFilter("domain", filters.domain === d.id ? "" : d.id)}>
+          {d.label}<span>aa {num(d.start)}–{num(d.end)}</span>
+        </button>)}
+      </div>
+      <div className="map-scroll" role="region" aria-label="Protein distribution map; scroll horizontally to inspect all residues" tabIndex={0}>
         <svg
           className="protein-map"
           role="group"
-          viewBox="0 0 1140 255"
+          viewBox="0 0 1140 315"
           aria-label="Variant distribution over the COL7A1 protein domains. Select a bar or domain to filter the table."
           aria-describedby="map-instructions"
         >
-          <text x="20" y="17" className="svg-caption">
-            VARIANT COUNT
+          <text x="54" y="17" className="svg-caption">
+            VARIANTS PER 25 RESIDUES
           </text>
           <text x="1120" y="17" textAnchor="end" className="svg-caption">
-            25-RESIDUE BINS · MAX {max}
+            CURRENT MAX {Math.max(0, ...bins.map(b => b.total))}
           </text>
+          {[...new Set([0, Math.ceil(max / 2), max])].map(count => (
+            <g key={count} aria-hidden="true">
+              <line x1="54" x2="1120" y1={150 - count / max * 100} y2={150 - count / max * 100} className="map-count-grid" />
+              <text x="44" y={154 - count / max * 100} textAnchor="end" className="map-count-label">{count}</text>
+            </g>
+          ))}
           {[500, 1000, 1500, 2000, 2500].map((n) => (
             <line
               key={n}
               x1={x(n)}
               x2={x(n)}
-              y1="27"
-              y2="217"
+              y1="40"
+              y2="265"
               className="grid-line"
             />
           ))}
@@ -147,31 +166,32 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
                 <title>{`aa ${bin.start}–${bin.end}: ${bin.total} variants (counted at the first reported residue)`}</title>
                 <rect
                   x={x(bin.start)}
-                  y="27"
-                  width={1100 / bins.length}
-                  height="100"
-                  fill={
-                    filters.range?.[0] === bin.start ? "#d7e8e1" : "transparent"
-                  }
+                  y="40"
+                  width={((bin.end - bin.start + 1) / protein.length) * plotWidth}
+                  height="111"
+                  className={filters.range?.[0] === bin.start ? "selected-bin-bg" : ""}
+                  fill="transparent"
                 />
                 {Object.entries(GROUPS).map(([key, group]) => {
-                  const height = (bin.counts[key] / max) * 92;
+                  const height = (bin.counts[key] / max) * 100;
                   cumulative += height;
                   return (
                     <rect
                       key={key}
                       x={x(bin.start)}
-                      y={127 - cumulative}
-                      width={Math.max(1, 1100 / bins.length - 2)}
+                      y={150 - cumulative}
+                      width={Math.max(1, ((bin.end - bin.start + 1) / protein.length) * plotWidth - 2)}
                       height={height}
-                      fill={group.color}
+                      fill={`var(--significance-${key}, ${group.color})`}
                     />
                   );
                 })}
               </g>
             );
           })}
-          <line x1="20" x2="1120" y1="128" y2="128" stroke="#cad6ce" />
+          <line x1="54" x2="1120" y1="151" y2="151" className="map-baseline" />
+          <text x="54" y="169" className="svg-caption">PROTEIN REGIONS</text>
+          <text x="54" y="226" className="svg-caption">ANNOTATED SUBDOMAINS</text>
           {regions.map((d) => (
             <g
               key={d.id}
@@ -193,16 +213,16 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
               <title>{`${d.label} · ${d.start}–${d.end} · ${d.description}`}</title>
               <rect
                 x={x(d.start)}
-                y="144"
-                width={((d.end - d.start + 1) / protein.length) * 1100}
-                height="32"
+                y="178"
+                width={((d.end - d.start + 1) / protein.length) * plotWidth}
+                height="34"
                 rx="3"
                 className={`domain-${d.label.toLowerCase().replaceAll(" ", "-")} ${filters.domain === d.id ? "active-domain" : ""}`}
               />
               {d.level !== "signal" && (
                 <text
                   x={(x(d.start) + x(d.end)) / 2}
-                  y="165"
+                  y="200"
                   textAnchor="middle"
                   className="domain-label"
                 >
@@ -232,9 +252,9 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
               <title>{`${d.label} · ${d.start}–${d.end}`}</title>
               <rect
                 x={x(d.start)}
-                y="185"
-                width={((d.end - d.start + 1) / protein.length) * 1100}
-                height="12"
+                y="238"
+                width={((d.end - d.start + 1) / protein.length) * plotWidth}
+                height="14"
                 rx="2"
                 className={filters.domain === d.id ? "active-subdomain" : ""}
               />
@@ -244,23 +264,23 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
             <text
               key={n}
               x={x(n)}
-              y="223"
+              y="280"
               textAnchor={n === 1 ? "start" : n === 2944 ? "end" : "middle"}
               className="axis-label"
             >
               {num(n)}
             </text>
           ))}
-          <text x="20" y="247" className="svg-caption">
-            SUBDOMAINS: VWFA · FIBRONECTIN TYPE III · BPTI/KUNITZ
+          <text x="54" y="307" className="svg-caption">
+            RESIDUE POSITION · SUBDOMAINS: VWFA / FIBRONECTIN TYPE III / BPTI–KUNITZ
           </text>
           {selected?.proteinMapping.status === "mapped" && (
             <line
               x1={x(selected.proteinMapping.start)}
               x2={x(selected.proteinMapping.start)}
-              y1="25"
-              y2="202"
-              stroke="#143f36"
+              y1="40"
+              y2="255"
+              className="selected-variant-marker"
               strokeWidth="2"
               strokeDasharray="3 3"
             />
@@ -271,7 +291,7 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
         <div className="legend">
           {Object.entries(GROUPS).map(([key, g]) => (
             <span key={key}>
-              <i style={{ background: g.color }} />
+              <i style={{ background: `var(--significance-${key}, ${g.color})` }} />
               {g.label}
             </span>
           ))}
@@ -284,7 +304,7 @@ function ProteinMap({ protein, variants, filters, onFilter, selected }) {
       </div>
       <p className="map-note" id="map-instructions">
         Coordinates include the signal peptide. Bars count each variant once at
-        its first reported residue; filters use interval overlap. Frameshifts
+        its first reported residue; filters use interval overlap. Colors group related classifications. Frameshifts
         show their anchor only. Use left/right arrow keys to move between bars,
         Home/End for the first/last bar, and Enter or Space to select.
       </p>
@@ -535,6 +555,13 @@ function Explorer({ data }) {
     setFilters((f) => ({ ...f, [key]: value }));
     setPage(0);
   }
+  function setDomainClassification(domain, significance) {
+    setFilters(f => ({ ...f,
+      domain: f.domain === domain && f.significance === significance ? "" : domain,
+      significance: f.domain === domain && f.significance === significance ? "" : significance,
+    }));
+    setPage(0);
+  }
   function clear() {
     setFilters({ ...EMPTY_FILTERS });
     setPage(0);
@@ -586,6 +613,7 @@ function Explorer({ data }) {
           LOCAL DATASET
           <span className="header-divider" />
           <a href="#data-sources" onClick={() => { document.getElementById("source-methods").open = true; }}>Data & methods</a>
+          <ThemeToggle />
         </div>
       </header>
       <main>
@@ -684,7 +712,7 @@ function Explorer({ data }) {
                 label="Clinical significance"
                 value={filters.significance}
                 onChange={(v) => setFilter("significance", v)}
-                options={options.clinicalSignificance}
+                options={[...options.clinicalSignificance, { value: UNCLASSIFIED, label: "Not reported" }]}
                 all="All classifications"
               />
               <Select
@@ -723,6 +751,8 @@ function Explorer({ data }) {
               />
             </div>
           </div>
+          <VisualSummary variants={results} allVariants={variants} protein={data.protein}
+            filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} onClear={clear} />
           <div className="results-toolbar">
             <div aria-live="polite">
               <strong>{num(results.length)}</strong> of {num(variants.length)}{" "}

@@ -1,4 +1,5 @@
 import { EMPTY_FILTERS, filterVariants } from "./data-utils.mjs";
+import { UNCLASSIFIED } from "./chart-data.mjs";
 
 export const EXPLORER_PAGE_SIZE = 50;
 export const MAX_SEARCH_LENGTH = 500;
@@ -32,7 +33,7 @@ export function readExplorerState(search, data) {
   if (query !== null) filters.query = query.slice(0, MAX_SEARCH_LENGTH);
 
   const allowed = {
-    significance: new Set(data.variants.flatMap((v) => v.clinicalSignificance)),
+    significance: new Set([...data.variants.flatMap((v) => v.clinicalSignificance), UNCLASSIFIED]),
     review: new Set(data.variants.flatMap((v) => v.reviewStatus)),
     domain: new Set(data.protein.domains.map((d) => d.id)),
     mapping: new Set(["mapped", "unmapped"]),

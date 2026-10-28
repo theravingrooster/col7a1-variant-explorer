@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { UNCLASSIFIED } from "../src/chart-data.mjs";
 import {
   EMPTY_FILTERS,
   filterVariants,
@@ -15,6 +16,12 @@ const data = JSON.parse(
 );
 const filter = (overrides) =>
   filterVariants(data.variants, { ...EMPTY_FILTERS, ...overrides });
+test("not-reported chart category filters missing classifications without including source no-classification labels", () => {
+  const missing = filter({ significance: UNCLASSIFIED });
+  assert.equal(missing.length, 38);
+  assert.ok(missing.every(v => v.clinicalSignificance.length === 0));
+  assert.equal(filter({ significance: "no classification for the single variant" }).length, 2);
+});
 test("search returns the source variant by HGVS and variation ID", () => {
   assert.ok(
     filter({ query: "c.8393T>A" }).some((v) => v.variationId === 17423),

@@ -1,3 +1,5 @@
+import { UNCLASSIFIED } from "./chart-data.mjs";
+
 export const GROUPS = {
   pathogenic: {
     label: "Pathogenic / likely pathogenic",
@@ -144,7 +146,9 @@ export function filterVariants(variants, filters) {
       ) &&
       matchesCoordinates(v, query) &&
       (!filters.significance ||
-        v.clinicalSignificance.includes(filters.significance)) &&
+        (filters.significance === UNCLASSIFIED
+          ? v.clinicalSignificance.length === 0
+          : v.clinicalSignificance.includes(filters.significance))) &&
       (!filters.review || v.reviewStatus.includes(filters.review)) &&
       (!filters.domain || m.domainIds.includes(filters.domain)) &&
       (!filters.mapping || m.status === filters.mapping) &&

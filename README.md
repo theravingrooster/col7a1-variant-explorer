@@ -90,11 +90,11 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 42 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 55 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
-For the 11 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
+For the 17 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
 
 ```sh
 npx playwright install chromium
@@ -107,3 +107,14 @@ npm run test:browser
 Set `BASE_URL` to test an accessible deployment. `CHROME_BIN` can select a compatible existing browser. The browser suite covers search, combined filters, chart navigation, pagination, evidence focus/dismissal, CSV/download integrity, 320/390/768/1440-pixel layouts, URL restoration, and network/malformed-data recovery. Browser tests are separate from `npm test`; a successful unit run does not imply the browser suite ran.
 
 See [AUDIT.md](AUDIT.md) for the review findings, fixes, and verification limits.
+
+
+## Visual summaries and display theme
+
+The summary above the results table contains an exact clinical-significance count chart and grouped bars for NC1, collagenous and NC2, colored by the same source categories. Both use the complete filtered result set, including records beyond the visible page. They respond to every search, review, mapping, type, domain and residue-range filter; changing sort/page does not change counts.
+
+Click a classification bar to toggle that filter, a domain heading to toggle the domain, or a domain/category bar to apply both together. Existing search and other filters remain active. Click the selected bar again or use the filter chips to clear it. Zero categories stay visible to keep the chart layout stable. The 38 records with no classification have a distinct “Not reported” filter, separate from the source’s explicit no-classification label. Chart selections persist in shareable URLs.
+
+Each domain uses the same numeric scale. Domain totals count unique variants; grouped bars avoid implying that multi-classification source labels are mutually exclusive. Unmapped and mapped-outside-region counts are shown explicitly. The protein map now has a count axis, larger region labels, visible coordinate ranges and touch-friendly region filters; its last partial bin uses its actual residue width.
+
+The header’s light/dark toggle defaults to the system preference, persists a manual choice on this device and preserves all explorer state. An external initializer applies the choice before styles load without weakening the Content Security Policy. Charts, table, source panels and evidence dialogs share the selected palette. Rendering uses native HTML/CSS and SVG; no charting dependency was added.

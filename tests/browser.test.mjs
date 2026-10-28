@@ -58,7 +58,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 beforeEach(async () => {
-  context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
+  context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true, colorScheme: "light" });
   page = await context.newPage();
   errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -102,6 +102,128 @@ test("classification, domain and mapping filters combine and reset correctly", a
   await page.getByLabel("Protein mapping", { exact: true }).selectOption("unmapped");
   await expectCount(source.summary.unmapped);
   assert.equal(await page.locator("tbody .domain-text").count(), 0);
+});
+
+test("clinical summary shows exact source counts and toggles the table classification filter", async () => {
+  const classificationChart = page.getByRole("group", { name: "Variant counts by clinical significance", exact: true });
+  const pathogenic = classificationChart.getByRole("button", { name: "Filter Pathogenic: 674 variants in current results", exact: true });
+  const notReported = classificationChart.getByRole("button", { name: "Filter Not reported: 38 variants in current results", exact: true });
+  assert.equal(await pathogenic.isVisible(), true);
+  assert.equal(await notReported.isVisible(), true);
+  assert.equal(await pathogenic.locator(".chart-count").innerText(), "674");
+  assert.equal(await notReported.locator(".chart-count").innerText(), "38");
+  await pathogenic.click();
+  await expectCount(674);
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "Pathogenic");
+  assert.equal(await pathogenic.getAttribute("aria-pressed"), "true");
+  assert.ok((await page.locator("tbody .badge").allTextContents()).every(label => label.trim() === "Pathogenic"));
+  await pathogenic.click();
+  await expectCount(source.summary.variants);
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "");
+  assert.equal(await pathogenic.getAttribute("aria-pressed"), "false");
+});
+
+test("a grouped domain/classification bar applies both filters and clears the selected pair", async () => {
+  const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
+  const expected = source.variants.filter(v => v.clinicalSignificance.includes("Pathogenic") && v.proteinMapping.domainIds.includes(nc2));
+  assert.equal(expected.length, 25);
+  const pair = page.getByRole("group", { name: "Variant counts by protein domain and clinical significance", exact: true })
+    .getByRole("button", { name: "Filter NC2 and Pathogenic: 25 variants in current results", exact: true });
+  await pair.click();
+  await expectCount(25);
+  assert.equal(await page.getByLabel("Protein domain", { exact: true }).inputValue(), nc2);
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "Pathogenic");
+  assert.equal(await pair.getAttribute("aria-pressed"), "true");
+  assert.deepEqual((await ids()).map(x => Number(x.replace(/\D/g, ""))), expected.map(v => v.variationId));
+  await pair.click();
+  await expectCount(source.summary.variants);
+  assert.equal(await page.getByLabel("Protein domain", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "");
+  assert.equal(await pair.getAttribute("aria-pressed"), "false");
+});
+
+test("summary charts count all filtered pages and show truthful zero-result counts", async () => {
+  await page.getByLabel("Clinical significance", { exact: true }).selectOption("Pathogenic");
+  await expectCount(674);
+  assert.equal(await tableRows().count(), 50);
+  assert.match(await page.locator(".summary-heading").innerText(), /674 variants across all pages/);
+  const summary = page.locator(".summary-panel");
+  const beforePageChange = await summary.locator(".chart-count, .domain-bar-value").allTextContents();
+  await page.getByRole("button", { name: "Next page", exact: true }).first().click();
+  await page.waitForFunction(() => document.querySelector(".pagination")?.textContent.includes("Page 2 of"));
+  assert.deepEqual(await summary.locator(".chart-count, .domain-bar-value").allTextContents(), beforePageChange);
+  assert.match(await page.locator(".summary-heading").innerText(), /674 variants across all pages/);
+  await query("this-variant-does-not-exist", 0);
+  const empty = summary.getByRole("status");
+  await empty.waitFor();
+  assert.match(await empty.innerText(), /No variants match the current filters/);
+  const zeroCounts = await summary.locator(".chart-count, .domain-bar-value").allTextContents();
+  assert.ok(zeroCounts.length > 0);
+  assert.ok(zeroCounts.every(value => Number(value.replaceAll(",", "")) === 0));
+  assert.match(await page.locator(".summary-heading").innerText(), /0 variants across all pages/);
+  await page.getByRole("button", { name: "Reset all filters", exact: true }).click();
+  await expectCount(source.summary.variants);
+  assert.equal(await summary.getByRole("status").count(), 0);
+});
+
+test("Not reported is filterable and its missing-classification state survives reload", async () => {
+  const notReported = page.getByRole("group", { name: "Variant counts by clinical significance", exact: true })
+    .getByRole("button", { name: "Filter Not reported: 38 variants in current results", exact: true });
+  await notReported.click();
+  await expectCount(38);
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "__not_classified__");
+  assert.ok((await page.locator("tbody .badge").allTextContents()).every(label => label.trim() === "Not classified"));
+  await page.waitForFunction(() => new URLSearchParams(location.search).get("significance") === "__not_classified__");
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(38);
+  assert.equal(await page.getByLabel("Clinical significance", { exact: true }).inputValue(), "__not_classified__");
+  assert.equal(await notReported.getAttribute("aria-pressed"), "true");
+  await notReported.click();
+  await expectCount(source.summary.variants);
+  await page.waitForFunction(() => !new URLSearchParams(location.search).has("significance"));
+});
+
+test("theme toggle persists across reload without altering filters or the shared URL", async () => {
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  const lightBackground = await page.locator("html").evaluate(el => getComputedStyle(el).backgroundColor);
+  await query("id:17423", 1);
+  await page.waitForFunction(() => new URLSearchParams(location.search).get("q") === "id:17423");
+  const filteredURL = page.url();
+  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  assert.equal(await page.getByRole("button", { name: "Switch to light mode", exact: true }).getAttribute("aria-description"), "Dark mode is active");
+  assert.equal(await page.evaluate(() => localStorage.getItem("col7a1-theme")), "dark");
+  assert.equal(await page.locator("html").evaluate(el => getComputedStyle(el).colorScheme), "dark");
+  assert.notEqual(await page.locator("html").evaluate(el => getComputedStyle(el).backgroundColor), lightBackground);
+  assert.equal(page.url(), filteredURL);
+  await expectCount(1);
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(1);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(await search().inputValue(), "id:17423");
+  assert.equal(page.url(), filteredURL);
+  await page.getByRole("button", { name: "Switch to light mode", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
+  assert.equal(await page.evaluate(() => localStorage.getItem("col7a1-theme")), "light");
+  assert.equal(page.url(), filteredURL);
+  assert.equal(await search().inputValue(), "id:17423");
+});
+
+test("theme initially follows system preference until the user chooses a mode", async () => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+  assert.equal(await page.evaluate(() => localStorage.getItem("col7a1-theme")), null);
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(source.summary.variants);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  await page.getByRole("button", { name: "Switch to light mode", exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === "light");
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(source.summary.variants);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
 });
 
 test("protein chart domain and residue selections work with mouse and keyboard", async () => {
