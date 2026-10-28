@@ -39,6 +39,8 @@
 .protein-workspace .map-baseline { stroke:var(--chart-grid); stroke-width:1; }
 .density-outline { stroke:transparent; stroke-width:1.5; pointer-events:none; }
 .histogram-bin:hover .density-outline, .histogram-bin:focus .density-outline { stroke:var(--text-primary); }
+.protein-workspace .histogram-bin:focus-visible { outline:none; }
+.histogram-bin:focus-visible .density-outline { stroke-width:2.5; }
 .protein-workspace .histogram-bin:hover { opacity:1; }
 .map-significance-legend { padding:0 0 12px; }
 .map-significance-legend p { margin:0 0 7px; font-size:10px; color:var(--text-muted); }
