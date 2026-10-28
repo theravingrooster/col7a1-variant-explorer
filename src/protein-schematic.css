@@ -15,7 +15,7 @@
 .schematic-strand.is-linked.depth-1 { opacity:.8; }
 .schematic-region { cursor:pointer; outline:none; }
 .schematic-hit-area { fill:transparent; stroke:transparent; stroke-width:1.5; }
-.schematic-region-label { fill:var(--text-muted); font-size:14px; font-weight:600; }
+.schematic-region-label { fill:var(--text-muted); font-size:20px; font-weight:600; }
 .schematic-leader { stroke:var(--border-color); stroke-width:1; }
 .schematic-region[data-active="true"] .schematic-region-label,.schematic-region[aria-pressed="true"] .schematic-region-label { fill:var(--schematic-linked); }
 .schematic-region[data-active="true"] .schematic-leader { stroke:var(--schematic-linked); }

@@ -26,8 +26,8 @@
 .protein-workspace .map-scroll { padding:0; }
 .protein-workspace .protein-map { width:100%; min-width:600px; }
 .map-plot-container { position:relative; }
-.protein-workspace .svg-caption { font-size:12px; letter-spacing:.6px; fill:var(--text-muted); }
-.protein-workspace .map-count-label,.protein-workspace .axis-label { font-size:13px; fill:var(--text-muted); }
+.protein-workspace .svg-caption { font-size:14px; letter-spacing:.1px; fill:var(--text-muted); }
+.protein-workspace .map-count-label,.protein-workspace .axis-label { font-size:14px; fill:var(--text-muted); }
 .protein-workspace .domain-label { font-size:16px; fill:#fff; }
 .protein-workspace .domain-collagenous + .domain-label { fill:#203e36; }
 .protein-workspace .domain-block .domain-nc1 { fill:var(--map-nc1); }

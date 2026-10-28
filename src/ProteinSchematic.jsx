@@ -7,7 +7,6 @@ const number = value => value.toLocaleString("en-US");
 export default function ProteinSchematic({ protein, activeRange = null, selectedDomain = "", onRegionHover, onRegionSelect }) {
   const regions = useMemo(() => schematicRegions(protein), [protein]);
   const linkedRange = linkedSchematicRange(protein, activeRange, selectedDomain);
-  const [localRegion, setLocalRegion] = useState(null);
   const [running, setRunning] = useState(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [pointerInside, setPointerInside] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
@@ -15,7 +14,8 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
   const rootRef = useRef(null), pathsRef = useRef(new Map()), sliderRef = useRef(null);
   const angleRef = useRef(24), rangeRef = useRef(null);
-  const highlightRange = localRegion ? [localRegion.start, localRegion.end] : linkedRange;
+  // The parent coordinates map and schematic hover; one range stays authoritative.
+  const highlightRange = linkedRange;
   rangeRef.current = highlightRange;
   const initialFrame = useMemo(() => schematicFrame(regions, 24), [regions]);
   const animate = running && !pointerInside && !focusWithin && inView && documentVisible;
@@ -62,7 +62,6 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
   }, [animate, regions]);
 
   function hoverRegion(region) {
-    setLocalRegion(region);
     onRegionHover?.(region);
   }
   function leaveRegion() { hoverRegion(null); }
@@ -72,7 +71,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
     paint(angleRef.current);
   }
   function selectRegion(region) { onRegionSelect?.(region); }
-  const focusedLabel = localRegion?.label || (highlightedRegions.length === 1 ? highlightedRegions[0].label : "Selected interval");
+  const focusedLabel = highlightedRegions.length === 1 ? highlightedRegions[0].label : "Selected interval";
 
   return <section ref={rootRef} className={`protein-schematic${highlightedRegions.length ? " has-highlight" : ""}`} aria-label="Collagen VII schematic"
     data-rotating={animate ? "true" : "false"} data-active-start={highlightRange?.[0] ?? ""} data-active-end={highlightRange?.[1] ?? ""}

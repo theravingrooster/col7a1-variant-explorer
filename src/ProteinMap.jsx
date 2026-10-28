@@ -186,7 +186,7 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
         <div className="map-plot-container">
           <div className="map-scroll" role="region" aria-label="Protein distribution map; scroll horizontally to inspect all residues" tabIndex={0}>
             <svg ref={mapRef} className="protein-map" role="group" viewBox={`0 0 900 ${plotBottom + 34}`} aria-label="Interactive COL7A1 protein map" aria-describedby="map-instructions">
-              <text x={X} y="15" className="svg-caption">PROTEIN REGIONS</text>
+              <text x={X} y="15" className="svg-caption">Protein regions</text>
               {activeRange && activeRange[0] <= end && activeRange[1] >= start && <rect data-linked-range={`${activeRange[0]}-${activeRange[1]}`} data-start={activeRange[0]} data-end={activeRange[1]} className="map-linked-highlight" x={x(Math.max(start, activeRange[0]))} y="25" width={Math.max(3, (Math.min(end, activeRange[1]) - Math.max(start, activeRange[0]) + 1) / span * WIDTH)} height={plotBottom - 25} rx="3" />}
               {regions.filter(d => d.start <= end && d.end >= start).map(d => {
                 const left = x(Math.max(start, d.start)), width = (Math.min(end, d.end) - Math.max(start, d.start) + 1) / span * WIDTH;
@@ -195,13 +195,13 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
                   {width > 35 && <text x={left + width / 2} y="51" textAnchor="middle" className="domain-label">{d.label}</text>}
                 </g>;
               })}
-              <text x={X} y="84" className="svg-caption">SUBDOMAINS</text>
+              <text x={X} y="84" className="svg-caption">Subdomains</text>
               {subdomains.filter(d => d.start <= end && d.end >= start).map(d => <g key={d.id} {...regionInteraction(d)} className={`subdomain-block ${inLinkedRange(d) ? "is-linked" : ""}`}>
                 <rect x={x(Math.max(start, d.start))} y="94" width={(Math.min(end, d.end) - Math.max(start, d.start) + 1) / span * WIDTH} height="15" rx="3" className={filters.domain === d.id ? "active-subdomain" : ""} />
               </g>)}
               {ticks.map(n => <g key={n} aria-hidden="true"><line x1={centerX(n)} x2={centerX(n)} y1="113" y2="118" className="map-count-grid" /><text x={centerX(n)} y="135" textAnchor={n === start ? "start" : n === end ? "end" : "middle"} className="axis-label">{num(n)}</text></g>)}
-              <text x={X} y="161" className="svg-caption">{markersShown ? "INDIVIDUAL VARIANTS" : `VARIANT COUNT · ${binSize} RESIDUE BINS`}</text>
-              <text x={X + WIDTH} y="161" textAnchor="end" className="svg-caption">{markersShown ? `${visible.length} VARIANTS` : "SELECT A BAR TO ZOOM"}</text>
+              <text x={X} y="161" className="svg-caption">{markersShown ? "Individual variants" : `Variant count · ${binSize} residue bins`}</text>
+              <text x={X + WIDTH} y="161" textAnchor="end" className="svg-caption">{markersShown ? `${visible.length} variants` : "Select a bar to zoom"}</text>
               {!markersShown && [0, max].map(count => <g key={count} aria-hidden="true">
                 <line x1={X} x2={X + WIDTH} y1={plotBottom - count / max * (plotBottom - PLOT_TOP)} y2={plotBottom - count / max * (plotBottom - PLOT_TOP)} className="map-count-grid" />
                 <text x={X - 9} y={plotBottom - count / max * (plotBottom - PLOT_TOP) + 4} textAnchor="end" className="map-count-label">{count}</text>
