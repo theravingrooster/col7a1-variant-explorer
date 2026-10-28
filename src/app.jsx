@@ -18,6 +18,7 @@ import ShareViewButton from "./ShareViewButton.jsx";
 import { updateFilter, toggleDomainClassification } from "./filter-actions.mjs";
 import VisualSummary from "./VisualSummary.jsx";
 import ProteinMap from "./ProteinMap.jsx";
+import ProteinReference from "./ProteinReference.jsx";
 import VariantDetails from "./VariantDetails.jsx";
 import VariantShortlist from "./VariantShortlist.jsx";
 import { CONDITION_OPTIONS, HGVS_PATTERN_OPTIONS, researchAnnotations } from "./research-data.mjs";
@@ -81,9 +82,9 @@ function Sources({ data }) {
   const ref = useRef(null);
   useEffect(() => {
     const openFromHash = () => {
-      if (location.hash === "#data-sources") {
+      if (["#data-sources", "#protein-reference", "#research-filter-methods"].includes(location.hash)) {
         ref.current.open = true;
-        document.getElementById("data-sources")?.scrollIntoView();
+        document.getElementById(location.hash.slice(1))?.scrollIntoView();
       }
     };
     openFromHash();
@@ -114,6 +115,7 @@ function Sources({ data }) {
           ))}
         </div>
         <p>{data.processing.mapping}</p>
+        <ProteinReference protein={data.protein} />
         <div className="research-methods" id="research-filter-methods">
           <h3>RDEB research filters</h3>
           <p>Condition context matches explicit recessive or dominant EB terms in the existing ClinVar condition summaries. Both labels may occur for one record. Generic DEB and summaries such as “7 conditions” do not establish inheritance, so an explicit-label cohort is incomplete. Classifications remain variant-level aggregates, not condition-specific assertions.</p>

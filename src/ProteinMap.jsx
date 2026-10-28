@@ -142,7 +142,8 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
   return <section className="panel protein-panel protein-workspace" aria-labelledby="protein-title">
     <div className="panel-heading">
       <div><p className="eyebrow">PROTEIN EXPLORER</p><h2 id="protein-title">Explore collagen VII</h2>
-        <p className="map-introduction">Hover to connect a residue with the protein. Select a region to explore its variants.</p></div>
+        <p className="map-introduction">Hover to connect a residue with the protein. Select a region to explore its variants.</p>
+        <a className="map-reference-link" href="#protein-reference" onClick={() => { document.getElementById("source-methods").open = true; }}>{num(protein.length)} aa precursor · Primary paper & boundary comparison</a></div>
       <a href={protein.url} target="_blank" rel="noreferrer" className="text-link">UniProt Q02388 <span aria-hidden="true">↗</span></a>
     </div>
     <div className="protein-explorer-grid">

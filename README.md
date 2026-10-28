@@ -77,6 +77,14 @@ These boundaries are copied from local UniProt features. A variant maps only whe
 
 Example: variation **17423**, `c.8393T>A (p.Met2798Lys)`, maps to **NC2** at residue **2798**. Its source evidence is on original lines **31733–31734**.
 
+### Protein length and primary references
+
+[Christiano et al. (1994), *Cloning of human type VII collagen. Complete primary sequence of the alpha 1(VII) chain and identification of intragenic polymorphisms*](https://pubmed.ncbi.nlm.nih.gov/8051117/) establishes the **2,944-amino-acid precursor** and its NC1–collagenous–NC2 organization. The earlier [Greenspan (1993) carboxyl-terminal sequence paper](https://pubmed.ncbi.nlm.nih.gov/8499916/) describes NC2.
+
+The historical lengths and today's exact feature intervals are not identical: the 1994 paper reports **1,530 residues** for the collagenous region and **161** for NC2; the retained UniProt Q02388-1 intervals give **1,531** and **160**, respectively. This one-residue junction difference is documented, not assumed to be a proven sequence correction. The site preserves its canonical source mapping: residue **Ala2784** remains collagenous. NC1 spans **1,237 residues** (17–1253); adding the separately displayed 16-residue signal peptide gives the 1,253-residue N-terminal portion.
+
+The 12 precise subdomain intervals are UniProt **PROSITE-ProRule computational annotations** (`ECO:0000255`), not experimentally measured boundaries asserted by the 1994 paper. All displayed coordinates and evidence arrays are verified against the archived UniProt JSON; primary papers explain the scientific architecture, while that snapshot defines the site's exact mapping convention.
+
 ## Interface
 
 Search HGVS, IDs, conditions, or genomic coordinates; combine classification, domain, review, mapping, and type filters. The primary workspace places a large interactive 3D domain schematic above a full-width residue map. The map starts with 50-residue density bins stacked by clinical-significance group. A nearby legend shows the mapped counts for each group under the current filters; each bin tooltip provides a numeric breakdown. Selecting a domain or bin filters the workspace and zooms to that region; a custom inclusive residue range is also available. Smaller filtered sets (at most 180 variants, with collision-safe marker lanes) display individual colored markers. Hover or keyboard focus shows HGVS, clinical significance, review status and submitter count; clicking or pressing Enter opens evidence. Dense sets remain binned. Intervals crossing the visible boundary count once at its left edge; hollow markers indicate a clipped start. Open a variant to inspect source lines and hashes. Exact searches support `id:17423`, `allele:32462`, `rs121912828`, accession-qualified HGVS, and assembly-specific coordinates such as `GRCh38 chr3:48566281`. Coordinate searches use inclusive interval overlap and keep assembly/reference matching on the same source record. Plain text searches retain their original partial-match behavior.
@@ -94,7 +102,7 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 135 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 139 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage, protein-reference provenance and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 

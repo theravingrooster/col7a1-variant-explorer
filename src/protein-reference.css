@@ -1,0 +1,23 @@
+.protein-reference { margin:24px 0; padding:20px 0; border-block:1px solid var(--border-color); scroll-margin-top:160px; color:var(--text-primary); }
+.protein-reference h3 { margin:0 0 14px; font-size:18px; }
+.protein-reference p { line-height:1.65; }
+.protein-primary-paper { padding:16px; border:1px solid var(--border-color); border-radius:6px; background:var(--surface-muted); }
+.protein-primary-paper .eyebrow { font-size:9px; margin:0 0 8px; }
+.protein-primary-paper h4 { margin:0 0 8px; font-size:14px; line-height:1.6; font-weight:600; }
+.protein-primary-paper p { margin:8px 0 0; }
+.protein-reference-links { display:flex; flex-wrap:wrap; gap:8px 20px; }
+.protein-reference-table-wrap { width:100%; overflow-x:auto; margin:16px 0; }
+.protein-reference-table { width:100%; min-width:560px; border-collapse:collapse; font-size:12px; }
+.protein-reference-table caption { text-align:left; margin:0 0 10px; color:var(--text-muted); font-size:11px; }
+.protein-reference-table th, .protein-reference-table td { padding:10px 12px; white-space:normal; text-align:left; border-bottom:1px solid var(--border-color); }
+.protein-reference-table thead th { background:var(--surface-muted); font-size:11px; color:var(--text-muted); }
+.protein-reference-table tbody th { font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:normal; text-transform:none; }
+.protein-boundary-note { padding:14px 16px; border-left:3px solid var(--text-muted); background:var(--surface-muted); border-radius:0 4px 4px 0; }
+.protein-boundary-note p { margin:8px 0 0; }
+.sources .protein-subdomain-references > summary { padding:12px 0; border:0; min-height:40px; font-size:12px; font-weight:600; letter-spacing:normal; width:fit-content; }
+.map-reference-link { display:block; margin-top:8px; font-size:11px; }
+@media(max-width:650px) {
+  .protein-reference { scroll-margin-top:230px; }
+  .protein-primary-paper { padding:12px; }
+  .protein-reference-table { min-width:490px; }
+}
