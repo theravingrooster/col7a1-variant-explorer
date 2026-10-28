@@ -49,6 +49,10 @@
 .visual-summary-panel { margin-top:18px; }
 .visual-summary-panel .summary-panel { border:0; }
 .research-workspace .table-panel { margin-top: 22px; }
+.table-scroll-hint { margin:0; padding:9px 28px; font-size:11px; color:var(--text-muted); border-top:1px solid var(--border-color); }
+.research-workspace .table-scroll { max-height:min(62vh,640px); overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; scroll-padding-top:48px; }
+.research-workspace .table-scroll table { border-collapse:separate; border-spacing:0; }
+.research-workspace .table-scroll thead th { position:sticky; top:0; z-index:2; box-shadow:0 1px 0 var(--border-color); }
 .research-workspace table { min-width: 1100px; }
 .research-workspace th:first-child, .research-workspace td:first-child { width: 21%; }
 .research-workspace th:nth-child(2) { width: 17%; }

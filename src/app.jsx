@@ -115,6 +115,7 @@ function Sources({ data }) {
   );
 }
 function Explorer({ data }) {
+  const tableScrollRef = useRef(null);
   const [initial] = useState(() => readExplorerState(location.search, data));
   const [filters, setFilters] = useState(initial.filters);
   const [showFilters, setShowFilters] = useState(false);
@@ -131,6 +132,9 @@ function Explorer({ data }) {
   );
   const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
   const shownPage = Math.min(page, pageCount - 1);
+  useEffect(() => {
+    if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
+  }, [results, shownPage]);
   useEffect(() => {
     const url = new URL(location.href);
     url.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId }).toString();
@@ -407,7 +411,8 @@ function Explorer({ data }) {
             </label>
           </div>
           {renderPagination("Top")}
-          <div className="table-scroll" role="region" aria-label="Variant results table; scroll horizontally for all columns" tabIndex={0}>
+          <p className="table-scroll-hint" id="table-scroll-help">Scroll inside the table to browse this page of variants.</p>
+          <div ref={tableScrollRef} className="table-scroll" role="region" aria-label="Variant results table; scroll vertically for rows and horizontally for all columns" aria-describedby="table-scroll-help" tabIndex={0}>
             <table>
               <caption className="sr-only">Filtered COL7A1 variants with clinical classifications, protein positions, conditions and source evidence.</caption>
               <thead>
