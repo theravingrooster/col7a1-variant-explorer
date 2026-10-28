@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import json
 import re
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,28 @@ def integer(value):
         return n if 0 < n < 2**31 - 1 else None
     except (TypeError, ValueError):
         return None
+
+
+def submitter_count(value):
+    """Read a source aggregate count; zero is valid and missing is not zero."""
+    if value is None or clean(value) is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r'\d+', value):
+        raise ValueError(f'Invalid NumberSubmitters: {value!r}')
+    count = int(value)
+    if count >= 2**31 - 1:
+        raise ValueError(f'Invalid NumberSubmitters: {value!r}')
+    return count
+
+
+def preparation_date(value):
+    """Require an explicit ISO date; never substitute the build/deploy date."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', value):
+        raise ValueError('Preparation date must be YYYY-MM-DD')
+    date.fromisoformat(value)
+    return value
 
 
 def unique(values):
@@ -162,6 +185,7 @@ def make_variant(variation_id, records, protein):
             'geneSymbols': unique(g for r in rows for g in gene_symbols(r['GeneSymbol'])), 'types': values('Type'),
             'names': values('Name'), 'hgvs': hgvs, 'codingHgvs': unique(h['coding'] for h in hgvs), 'proteinHgvs': unique(h['protein'] for h in hgvs),
             'clinicalSignificance': classification, 'significanceGroup': significance_group(classification), 'reviewStatus': values('ReviewStatus'),
+            'numberSubmitters': unique(submitter_count(r.get('NumberSubmitters')) for r in rows),
             'conditions': unique(p for r in rows for p in r.get('PhenotypeList', '').split('|') if clean(p)),
             'conditionIdentifiers': unique(p for r in rows for p in r.get('PhenotypeIDS', '').split('|') if clean(p)),
             'lastEvaluated': values('LastEvaluated'), 'origins': values('Origin'), 'rcvAccessions': unique(p for r in rows for p in r.get('RCVaccession', '').split('|') if clean(p)),
@@ -170,7 +194,8 @@ def make_variant(variation_id, records, protein):
             'sourceRecords': [{'sourceId': 'clinvar', 'line': r['line'], 'sha256': r['sha256']} for r in records]}
 
 
-def process(clinvar, uniprot, output):
+def process(clinvar, uniprot, output, prepared_date=None):
+    prepared_date = preparation_date(prepared_date)
     output.mkdir(parents=True, exist_ok=True)
     protein = parse_uniprot(uniprot)
     grouped = collections.defaultdict(list)
@@ -208,7 +233,7 @@ def process(clinvar, uniprot, output):
         raise ValueError('No COL7A1 records found')
     variants = [make_variant(vid, records, protein) for vid, records in sorted(grouped.items())]
     counts = collections.Counter(v['proteinMapping']['status'] for v in variants)
-    data = {'schemaVersion': '1.0.0', 'gene': 'COL7A1',
+    data = {'schemaVersion': '1.0.0', 'gene': 'COL7A1', 'snapshot': {'preparedDate': prepared_date},
         'coordinateSystem': {'protein': '1-based inclusive, UniProt precursor sequence (including signal peptide)', 'genomic': '1-based inclusive, assembly preserved as reported by ClinVar'},
         'sources': {
             'clinvar': {'file': clinvar.name, 'sha256': sha256(clinvar), 'bytes': clinvar.stat().st_size, 'releaseDate': None,
@@ -219,6 +244,7 @@ def process(clinvar, uniprot, output):
         },
         'processing': {'script': 'scripts/process_data.py', 'scriptSha256': sha256(Path(__file__)),
             'grouping': 'One record per VariationID; all matching alleles, names, assemblies and source lines preserved.',
+            'submitterCounts': 'Distinct NumberSubmitters values reported by ClinVar for each VariationID; repeated assembly rows are not summed. Counts do not determine review status or clinical significance.',
             'geneFilter': 'Exact COL7A1 token in GeneSymbol, including multigene variants.',
             'mapping': 'Explicit protein HGVS only, exact RefSeq accession linked to Q02388-1 in local UniProt, with endpoint reference residues checked against its sequence. Inclusive interval overlap with domains.',
             'limitations': ['No transcript/CDS/exon sequence or alignment is supplied. Coding/genomic coordinates are not converted to protein coordinates.',
@@ -242,5 +268,6 @@ if __name__ == '__main__':
     parser.add_argument('--clinvar', type=Path, default=ROOT / 'variant_summary.txt.gz')
     parser.add_argument('--uniprot', type=Path, default=ROOT / 'Q02388.json')
     parser.add_argument('--output', type=Path, default=ROOT / 'public/data')
+    parser.add_argument('--prepared-date', help='Explicit preparation date of these source files (YYYY-MM-DD); not a ClinVar release date')
     args = parser.parse_args()
-    process(args.clinvar.resolve(), args.uniprot.resolve(), args.output.resolve())
+    process(args.clinvar.resolve(), args.uniprot.resolve(), args.output.resolve(), args.prepared_date)

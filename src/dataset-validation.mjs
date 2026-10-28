@@ -44,9 +44,19 @@ export function validateDataset(data) {
   const nullablePosition = (value, path) => {
     if (value !== null) integer(value, path, 1);
   };
+  const nullableDate = (value, path) => {
+    if (value === null) return;
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+      fail(path, "must be an ISO date or null");
+    const parsed = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value)
+      fail(path, "must be a real calendar date");
+  };
 
   object(data, "root");
   if (data.schemaVersion !== "1.0.0") fail("schemaVersion", "is unsupported");
+  object(data.snapshot, "snapshot");
+  nullableDate(data.snapshot.preparedDate, "snapshot.preparedDate");
   object(data.summary, "summary");
   for (const key of ["variants", "sourceRows", "mapped", "unmapped"])
     integer(data.summary[key], `summary.${key}`);
@@ -58,8 +68,10 @@ export function validateDataset(data) {
     hash(source.sha256, `sources.${key}.sha256`);
   }
   hash(data.sources.clinvar.extractedSha256, "sources.clinvar.extractedSha256");
+  nullableDate(data.sources.clinvar.releaseDate, "sources.clinvar.releaseDate");
   object(data.processing, "processing");
   string(data.processing.mapping, "processing.mapping");
+  string(data.processing.submitterCounts, "processing.submitterCounts");
   strings(data.processing.limitations, "processing.limitations");
 
   const protein = data.protein;
@@ -104,6 +116,12 @@ export function validateDataset(data) {
       "clinicalSignificance", "reviewStatus", "types", "codingHgvs", "proteinHgvs",
       "lastEvaluated", "dbSnpIds", "otherIds",
     ]) strings(variant[key], `${path}.${key}`);
+    array(variant.numberSubmitters, `${path}.numberSubmitters`);
+    variant.numberSubmitters.forEach((count, i) => {
+      integer(count, `${path}.numberSubmitters[${i}]`);
+      if (i > 0 && count <= variant.numberSubmitters[i - 1])
+        fail(`${path}.numberSubmitters`, "must contain distinct counts in ascending order");
+    });
     array(variant.alleleIds, `${path}.alleleIds`);
     variant.alleleIds.forEach((id, i) => integer(id, `${path}.alleleIds[${i}]`, 1));
     if (!Object.hasOwn(GROUPS, variant.significanceGroup))

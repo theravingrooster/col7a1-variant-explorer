@@ -6,7 +6,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
-from process_data import ROOT, gene_symbols, make_variant, parse_uniprot, sha256
+from process_data import ROOT, gene_symbols, make_variant, parse_uniprot, preparation_date, sha256
 
 
 def require(condition, message):
@@ -77,6 +77,7 @@ def verify(snapshot_only=False, root=ROOT):
     root = Path(root)
     data = json.loads((root / 'public/data/variants.json').read_text(encoding='utf-8'))
     require(data['schemaVersion'] == '1.0.0' and data['gene'] == 'COL7A1', 'Unexpected dataset schema or gene')
+    preparation_date(data['snapshot']['preparedDate'])
     raw_path = root / data['sources']['clinvar']['file']
     uni_path = root / data['sources']['uniprot']['file']
     if not snapshot_only and not raw_path.is_file():

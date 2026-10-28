@@ -2,7 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from process_data import ROOT, extract_hgvs, gene_symbols, integer, make_variant, parse_uniprot, protein_position
+from process_data import ROOT, extract_hgvs, gene_symbols, integer, make_variant, parse_uniprot, preparation_date, protein_position, submitter_count
 
 
 class ProteinMappingTests(unittest.TestCase):
@@ -66,6 +66,33 @@ class ProteinMappingTests(unittest.TestCase):
         regions = {d['label']: (d['start'], d['end']) for d in p['domains'] if d['level'] == 'region'}
         self.assertEqual(regions, {'NC1': (17, 1253), 'Collagenous': (1254, 2784), 'NC2': (2785, 2944)})
         self.assertEqual(len(p['sequence']), 2944)
+
+    def test_submitter_counts_keep_zero_distinct_from_missing(self):
+        self.assertEqual(submitter_count('0'), 0)
+        self.assertEqual(submitter_count('17'), 17)
+        for missing in [None, '', '-', 'na', 'N/A', 'not available']:
+            self.assertIsNone(submitter_count(missing))
+        for invalid in ['-1', '1.5', 'many', '2147483647']:
+            with self.assertRaisesRegex(ValueError, 'NumberSubmitters'):
+                submitter_count(invalid)
+
+    def test_submitter_counts_deduplicate_assemblies_and_preserve_disagreement(self):
+        protein = {'sequence': 'MAGP', 'refSeqLinks': [{'transcript': 'NM_000094.4', 'protein': 'NP_000085.1'}], 'domains': []}
+        fields = {'AlleleID': '8', 'GeneSymbol': 'COL7A1', 'Name': 'NM_000094.4(COL7A1):c.7G>A (p.Gly3Arg)',
+                  'ReviewStatus': 'criteria provided, single submitter'}
+        rows = [{'line': i + 2, 'sha256': str(i), 'fields': {**fields, 'NumberSubmitters': count}}
+                for i, count in enumerate(['3', '3', '2', '0', '-'])]
+        v = make_variant(7, rows, protein)
+        self.assertEqual(v['numberSubmitters'], [0, 2, 3])
+        self.assertEqual(v['reviewStatus'], ['criteria provided, single submitter'])
+        self.assertEqual(make_variant(7, [{**rows[0], 'fields': fields}], protein)['numberSubmitters'], [])
+
+    def test_preparation_date_is_explicit_and_validated(self):
+        self.assertIsNone(preparation_date(None))
+        self.assertEqual(preparation_date('2026-10-27'), '2026-10-27')
+        for invalid in ['2026-02-30', '2026-2-3', '', 'today']:
+            with self.assertRaises(ValueError):
+                preparation_date(invalid)
 
 
 if __name__ == '__main__':

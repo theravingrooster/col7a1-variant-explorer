@@ -23,7 +23,7 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
       <div className="summary-heading">
         <div>
           <p className="eyebrow">VISUAL SUMMARY</p>
-          <h3 id="summary-title">Current results at a glance</h3>
+          <h2 id="summary-title">Current results at a glance</h2>
           <p><strong>{num(variants.length)}</strong> variants across all pages. Counts reflect every current filter. Selecting a bar replaces its classification or domain filter; select it again to clear it.</p>
         </div>
         {hasFilters && <button className="button" onClick={onClear}>Reset all filters</button>}
@@ -37,7 +37,7 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
       <div className="summary-chart-grid">
         <article className="summary-card" aria-labelledby="classification-chart-title">
           <div className="chart-card-heading">
-            <h4 id="classification-chart-title">Clinical significance</h4>
+            <h3 id="classification-chart-title">Clinical significance</h3>
             <span className="chart-axis">Number of variants</span>
           </div>
           <div className="classification-bars" role="group" aria-label="Variant counts by clinical significance">
@@ -57,7 +57,7 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
         </article>
         <article className="summary-card" aria-labelledby="domain-chart-title">
           <div className="chart-card-heading">
-            <h4 id="domain-chart-title">Protein domain × significance</h4>
+            <h3 id="domain-chart-title">Protein domain × significance</h3>
             <span className="chart-axis">Shared scale: 0–{num(Math.max(0, ...domains.flatMap(d => d.series.map(c => c.count))))} variants per bar</span>
           </div>
           <div className="domain-groups" role="group" aria-label="Variant counts by protein domain and clinical significance">

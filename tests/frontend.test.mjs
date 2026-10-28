@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { UNCLASSIFIED } from "../src/chart-data.mjs";
+import { evidenceSummary, submittersLabel, MULTIPLE_SUBMITTERS_REVIEW } from "../src/evidence.mjs";
 import {
   EMPTY_FILTERS,
   filterVariants,
@@ -132,4 +133,90 @@ test("CSV exports all filtered rows, quotes source fields and neutralizes formul
   assert.equal(csvCell('a,"b"'), '"a,""b"""');
   assert.equal(csvCell("=1+1"), '"\'=1+1"');
   assert.equal(csvCell("  @SUM(1)"), '"\'  @SUM(1)"');
+});
+
+test("evidence labels preserve review provenance independently from submitter counts", () => {
+  const single = evidenceSummary({
+    reviewStatus: ["criteria provided, single submitter"], numberSubmitters: [3],
+  });
+  assert.equal(single.shortLabel, "Single submitter review");
+  assert.equal(single.submittersLabel, "3 submitters");
+  assert.equal(single.multipleSubmittersNoConflicts, false);
+  const consensus = evidenceSummary({reviewStatus: [MULTIPLE_SUBMITTERS_REVIEW], numberSubmitters: [4, 4]});
+  assert.equal(consensus.tone, "consensus");
+  assert.equal(consensus.fullLabel, MULTIPLE_SUBMITTERS_REVIEW);
+  assert.equal(consensus.submittersLabel, "4 submitters");
+  assert.equal(consensus.multipleSubmittersNoConflicts, true);
+  const mixed = evidenceSummary({reviewStatus: [MULTIPLE_SUBMITTERS_REVIEW, "criteria provided, conflicting classifications"]});
+  assert.equal(mixed.shortLabel, "Multiple review statuses");
+  assert.equal(mixed.tone, "conflicting");
+  assert.ok(mixed.fullLabel.includes("conflicting classifications"));
+});
+
+test("submitter labels distinguish missing, zero, one and differing source values", () => {
+  assert.equal(submittersLabel({}), "Submitter count not reported");
+  assert.equal(submittersLabel({numberSubmitters: [0]}), "0 submitters");
+  assert.equal(submittersLabel({numberSubmitters: [1, 1]}), "1 submitter");
+  assert.equal(submittersLabel({numberSubmitters: [4, 2, 4]}), "2 / 4 submitters (source counts differ)");
+  assert.equal(submittersLabel({numberSubmitters: [-1, null, 2.5]}), "Submitter count not reported");
+});
+
+test("multiple submitters without conflicts preset matches the source review status exactly", () => {
+  const reviewed = filter({ review: MULTIPLE_SUBMITTERS_REVIEW });
+  assert.equal(reviewed.length, 928);
+  assert.ok(reviewed.every(v => evidenceSummary(v).multipleSubmittersNoConflicts));
+  // A count of 2+ does not establish that the aggregate review status is consensus.
+  const singleReviewWithMultipleCounts = data.variants.filter(v =>
+    v.reviewStatus.includes("criteria provided, single submitter") && v.numberSubmitters?.some(n => n > 1));
+  assert.equal(singleReviewWithMultipleCounts.length, 217);
+  assert.ok(singleReviewWithMultipleCounts.every(v => !reviewed.includes(v)));
+  const nc2 = data.protein.domains.find(d => d.label === "NC2").id;
+  const combined = filter({ review: MULTIPLE_SUBMITTERS_REVIEW, domain: nc2, significance: "Pathogenic/Likely pathogenic" });
+  assert.ok(combined.length > 0);
+  assert.ok(combined.every(v => reviewed.includes(v) && v.proteinMapping.domainIds.includes(nc2)));
+});
+
+function parseCsv(text) {
+  const records = [];
+  let record = [], field = "", quoted = false;
+  const csv = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < csv.length; i++) {
+    const ch = csv[i];
+    if (ch === '"') {
+      if (quoted && csv[i + 1] === '"') { field += '"'; i++; }
+      else quoted = !quoted;
+    } else if (ch === ',' && !quoted) { record.push(field); field = ""; }
+    else if (ch === '\r' && csv[i + 1] === '\n' && !quoted) {
+      record.push(field); records.push(record); record = []; field = ""; i++;
+    } else field += ch;
+  }
+  return records;
+}
+
+test("CSV research columns retain source submitters, mapping and snapshot context for the complete filtered cohort", () => {
+  const rows = filter({ review: MULTIPLE_SUBMITTERS_REVIEW });
+  const [header, ...records] = parseCsv(variantsCsv(rows, data.protein.domains, data));
+  assert.ok(rows.length > 50);
+  assert.equal(records.length, rows.length);
+  assert.deepEqual(records.map(r => Number(r[header.indexOf("Variation ID")])), rows.map(v => v.variationId));
+  for (const name of ["Coding HGVS", "Protein HGVS", "Clinical significance", "Review status", "Domains", "Protein start (1-based)", "Protein end (inclusive)", "Conditions (as reported)", "ClinVar URL", "Number of submitters (source counts)"])
+    assert.ok(header.includes(name), name);
+  const index = rows.findIndex(v => v.variationId === 17423);
+  const value = name => records[index][header.indexOf(name)];
+  assert.equal(value("Coding HGVS"), "c.8393T>A");
+  assert.equal(value("Protein HGVS"), "p.Met2798Lys");
+  assert.equal(value("Review status"), MULTIPLE_SUBMITTERS_REVIEW);
+  assert.equal(value("Domains"), "NC2");
+  assert.equal(value("Protein start (1-based)"), "2798");
+  assert.equal(value("Number of submitters (source counts)"), rows[index].numberSubmitters.join("; "));
+  assert.equal(value("Snapshot prepared date"), "2026-10-27");
+  assert.equal(value("ClinVar release date"), "Unknown");
+  assert.equal(value("Protein reference"), "Q02388");
+  assert.equal(value("Protein mapping method"), "explicit_protein_hgvs");
+  assert.equal(value("Protein mapping provenance"), data.processing.mapping);
+  const synthetic = { ...data.variants[0], numberSubmitters: [0, 0, 2], conditions: ['Quoted "condition", with comma\nand newline'] };
+  const [syntheticHeader, syntheticRow] = parseCsv(variantsCsv([synthetic], data.protein.domains));
+  assert.equal(syntheticRow[syntheticHeader.indexOf("Number of submitters (source counts)")], "0; 2");
+  assert.equal(syntheticRow[syntheticHeader.indexOf("Conditions (as reported)")], synthetic.conditions[0]);
+  assert.equal(syntheticRow[syntheticHeader.indexOf("Snapshot prepared date")], "Not recorded");
 });

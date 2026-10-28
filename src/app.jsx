@@ -2,11 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   EMPTY_FILTERS,
-  GROUPS,
   filterVariants,
   formatNumber as num,
-  histogram,
-  humanReason,
   positionLabel,
   searchableText,
   sortVariants,
@@ -17,6 +14,11 @@ import "./charts.css";
 import "./theme.css";
 import ThemeToggle from "./ThemeToggle.jsx";
 import VisualSummary from "./VisualSummary.jsx";
+import ProteinMap from "./ProteinMap.jsx";
+import VariantDetails from "./VariantDetails.jsx";
+import ReviewSummary from "./ReviewSummary.jsx";
+import { MULTIPLE_SUBMITTERS_REVIEW } from "./evidence.mjs";
+import "./workspace.css";
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { validateDataset } from "./dataset-validation.mjs";
 import { readExplorerState, writeExplorerState, EXPLORER_PAGE_SIZE as PAGE_SIZE, MAX_SEARCH_LENGTH } from "./explorer-state.mjs";
@@ -50,402 +52,6 @@ function Select({ label, value, onChange, options, all = "All" }) {
         ))}
       </select>
     </label>
-  );
-}
-function ProteinMap({ protein, variants, filters, onFilter, selected }) {
-  const bins = useMemo(
-    () => histogram(variants, protein.length),
-    [variants, protein.length],
-  );
-  const max = Math.max(1, ...bins.map((b) => b.total));
-  const mapped = variants.filter(
-    (v) => v.proteinMapping.status === "mapped",
-  ).length;
-  const [hovered, setHovered] = useState(null);
-  const [focusedBin, setFocusedBin] = useState(0);
-  const hoveredBin = hovered === null ? null : bins[hovered];
-  const plotWidth = 1066;
-  const x = (n) => 54 + ((n - 1) / protein.length) * plotWidth;
-  const regions = protein.domains.filter((d) => d.level !== "subdomain");
-  const subdomains = protein.domains.filter((d) => d.level === "subdomain");
-  function activateBin(bin) {
-    onFilter(
-      "range",
-      filters.range?.[0] === bin.start && filters.range?.[1] === bin.end
-        ? null
-        : [bin.start, bin.end],
-    );
-  }
-  return (
-    <section className="panel protein-panel" aria-labelledby="protein-title">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">PROTEIN ARCHITECTURE</p>
-          <h2 id="protein-title">A view along collagen VII</h2>
-        </div>
-        <ExternalLink href={protein.url} className="text-link">
-          UniProt Q02388
-        </ExternalLink>
-      </div>
-      <div className="map-summary">
-        <span>
-          <strong>{num(mapped)}</strong> mapped in current results{" "}
-          <span className="muted">
-            / {num(variants.length - mapped)} unmapped
-          </span>
-        </span>
-        <span className="mono">{num(protein.length)} amino acids · 1-based positions</span>
-        {filters.range && <button className="map-range-clear" onClick={() => onFilter("range", null)}>Clear selected range: aa {filters.range.join("–")}</button>}
-      </div>
-      <div className="map-region-guide" aria-label="Protein region filters">
-        {regions.map(d => <button key={d.id} aria-pressed={filters.domain === d.id}
-          onClick={() => onFilter("domain", filters.domain === d.id ? "" : d.id)}>
-          {d.label}<span>aa {num(d.start)}–{num(d.end)}</span>
-        </button>)}
-      </div>
-      <div className="map-scroll" role="region" aria-label="Protein distribution map; scroll horizontally to inspect all residues" tabIndex={0}>
-        <svg
-          className="protein-map"
-          role="group"
-          viewBox="0 0 1140 315"
-          aria-label="Variant distribution over the COL7A1 protein domains. Select a bar or domain to filter the table."
-          aria-describedby="map-instructions"
-        >
-          <text x="54" y="17" className="svg-caption">
-            VARIANTS PER 25 RESIDUES
-          </text>
-          <text x="1120" y="17" textAnchor="end" className="svg-caption">
-            CURRENT MAX {Math.max(0, ...bins.map(b => b.total))}
-          </text>
-          {[...new Set([0, Math.ceil(max / 2), max])].map(count => (
-            <g key={count} aria-hidden="true">
-              <line x1="54" x2="1120" y1={150 - count / max * 100} y2={150 - count / max * 100} className="map-count-grid" />
-              <text x="44" y={154 - count / max * 100} textAnchor="end" className="map-count-label">{count}</text>
-            </g>
-          ))}
-          {[500, 1000, 1500, 2000, 2500].map((n) => (
-            <line
-              key={n}
-              x1={x(n)}
-              x2={x(n)}
-              y1="40"
-              y2="265"
-              className="grid-line"
-            />
-          ))}
-          {bins.map((bin, index) => {
-            let cumulative = 0;
-            return (
-              <g
-                key={bin.start}
-                role="button"
-                tabIndex={focusedBin === index ? 0 : -1}
-                data-bin={index}
-                aria-pressed={filters.range?.[0] === bin.start && filters.range?.[1] === bin.end}
-                aria-label={`Filter amino acids ${bin.start} to ${bin.end}, ${bin.total} variants`}
-                onClick={() => activateBin(bin)}
-                onKeyDown={(e) => {
-                  const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: bins.length - 1 - index };
-                  if (Object.hasOwn(offsets, e.key)) {
-                    e.preventDefault();
-                    const next = Math.max(0, Math.min(bins.length - 1, index + offsets[e.key]));
-                    e.currentTarget.parentElement.querySelector(`[data-bin="${next}"]`)?.focus();
-                    return;
-                  }
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    activateBin(bin);
-                  }
-                }}
-                onMouseEnter={() => setHovered(index)}
-                onMouseLeave={() => setHovered(null)}
-                onFocus={() => { setHovered(index); setFocusedBin(index); }}
-                onBlur={() => setHovered(null)}
-                className="histogram-bin"
-              >
-                <title>{`aa ${bin.start}–${bin.end}: ${bin.total} variants (counted at the first reported residue)`}</title>
-                <rect
-                  x={x(bin.start)}
-                  y="40"
-                  width={((bin.end - bin.start + 1) / protein.length) * plotWidth}
-                  height="111"
-                  className={filters.range?.[0] === bin.start ? "selected-bin-bg" : ""}
-                  fill="transparent"
-                />
-                {Object.entries(GROUPS).map(([key, group]) => {
-                  const height = (bin.counts[key] / max) * 100;
-                  cumulative += height;
-                  return (
-                    <rect
-                      key={key}
-                      x={x(bin.start)}
-                      y={150 - cumulative}
-                      width={Math.max(1, ((bin.end - bin.start + 1) / protein.length) * plotWidth - 2)}
-                      height={height}
-                      fill={`var(--significance-${key}, ${group.color})`}
-                    />
-                  );
-                })}
-              </g>
-            );
-          })}
-          <line x1="54" x2="1120" y1="151" y2="151" className="map-baseline" />
-          <text x="54" y="169" className="svg-caption">PROTEIN REGIONS</text>
-          <text x="54" y="226" className="svg-caption">ANNOTATED SUBDOMAINS</text>
-          {regions.map((d) => (
-            <g
-              key={d.id}
-              role="button"
-              tabIndex="0"
-              aria-pressed={filters.domain === d.id}
-              aria-label={`Filter ${d.label}, amino acids ${d.start} to ${d.end}`}
-              onClick={() =>
-                onFilter("domain", filters.domain === d.id ? "" : d.id)
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onFilter("domain", filters.domain === d.id ? "" : d.id);
-                }
-              }}
-              className="domain-block"
-            >
-              <title>{`${d.label} · ${d.start}–${d.end} · ${d.description}`}</title>
-              <rect
-                x={x(d.start)}
-                y="178"
-                width={((d.end - d.start + 1) / protein.length) * plotWidth}
-                height="34"
-                rx="3"
-                className={`domain-${d.label.toLowerCase().replaceAll(" ", "-")} ${filters.domain === d.id ? "active-domain" : ""}`}
-              />
-              {d.level !== "signal" && (
-                <text
-                  x={(x(d.start) + x(d.end)) / 2}
-                  y="200"
-                  textAnchor="middle"
-                  className="domain-label"
-                >
-                  {d.label}
-                </text>
-              )}
-            </g>
-          ))}
-          {subdomains.map((d) => (
-            <g
-              key={d.id}
-              role="button"
-              tabIndex="0"
-              aria-pressed={filters.domain === d.id}
-              aria-label={`Filter ${d.label}, amino acids ${d.start} to ${d.end}`}
-              className="subdomain-block"
-              onClick={() =>
-                onFilter("domain", filters.domain === d.id ? "" : d.id)
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onFilter("domain", filters.domain === d.id ? "" : d.id);
-                }
-              }}
-            >
-              <title>{`${d.label} · ${d.start}–${d.end}`}</title>
-              <rect
-                x={x(d.start)}
-                y="238"
-                width={((d.end - d.start + 1) / protein.length) * plotWidth}
-                height="14"
-                rx="2"
-                className={filters.domain === d.id ? "active-subdomain" : ""}
-              />
-            </g>
-          ))}
-          {[1, 500, 1000, 1500, 2000, 2500, 2944].map((n) => (
-            <text
-              key={n}
-              x={x(n)}
-              y="280"
-              textAnchor={n === 1 ? "start" : n === 2944 ? "end" : "middle"}
-              className="axis-label"
-            >
-              {num(n)}
-            </text>
-          ))}
-          <text x="54" y="307" className="svg-caption">
-            RESIDUE POSITION · SUBDOMAINS: VWFA / FIBRONECTIN TYPE III / BPTI–KUNITZ
-          </text>
-          {selected?.proteinMapping.status === "mapped" && (
-            <line
-              x1={x(selected.proteinMapping.start)}
-              x2={x(selected.proteinMapping.start)}
-              y1="40"
-              y2="255"
-              className="selected-variant-marker"
-              strokeWidth="2"
-              strokeDasharray="3 3"
-            />
-          )}
-        </svg>
-      </div>
-      <div className="map-footer">
-        <div className="legend">
-          {Object.entries(GROUPS).map(([key, g]) => (
-            <span key={key}>
-              <i style={{ background: `var(--significance-${key}, ${g.color})` }} />
-              {g.label}
-            </span>
-          ))}
-        </div>
-        <span className="map-hover">
-          {hoveredBin
-            ? `aa ${hoveredBin.start}–${hoveredBin.end} · ${hoveredBin.total} variants`
-            : "Select a bar or domain to explore"}
-        </span>
-      </div>
-      <p className="map-note" id="map-instructions">
-        Coordinates include the signal peptide. Bars count each variant once at
-        its first reported residue; filters use interval overlap. Colors group related classifications. Frameshifts
-        show their anchor only. Use left/right arrow keys to move between bars,
-        Home/End for the first/last bar, and Enter or Space to select.
-      </p>
-    </section>
-  );
-}
-function VariantDetails({ variant: v, protein, onClose }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    const opener = document.activeElement;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      document.body.style.overflow = previousOverflow;
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
-    };
-  }, []);
-  const m = v.proteinMapping;
-  return (
-    <dialog
-      ref={ref}
-      className="detail-dialog"
-      onCancel={onClose}
-      onClick={(e) => {
-        if (e.target !== e.currentTarget) return;
-        const rect = e.currentTarget.getBoundingClientRect();
-        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) onClose();
-      }}
-      aria-labelledby="detail-title"
-    >
-      <div className="detail-header">
-        <p className="eyebrow">CLINVAR VARIATION {v.variationId}</p>
-        <button
-          className="icon-button"
-          onClick={onClose}
-          aria-label="Close variant details"
-          autoFocus
-        >
-          ×
-        </button>
-      </div>
-      <h2 id="detail-title" className="mono">
-        {v.codingHgvs.join(" / ") || `Variation ${v.variationId}`}
-      </h2>
-      <p className="protein-hgvs mono">
-        {v.proteinHgvs.join(" / ") || "No protein HGVS reported"}
-      </p>
-      <Badge variant={v} />
-      <dl className="detail-grid">
-        <div>
-          <dt>Review status</dt>
-          <dd>{v.reviewStatus.join("; ") || "Not reported"}</dd>
-        </div>
-        <div>
-          <dt>Variant type</dt>
-          <dd>{v.types.join("; ")}</dd>
-        </div>
-        <div>
-          <dt>Protein mapping</dt>
-          <dd>
-            {positionLabel(m)}
-            {m.status === "unmapped"
-              ? ` · ${humanReason(m.reason)}`
-              : " · reference residues match Q02388"}
-          </dd>
-        </div>
-        <div>
-          <dt>Domain overlap</dt>
-          <dd>
-            {m.domainIds
-              .map((id) => protein.domains.find((d) => d.id === id)?.label)
-              .join("; ") || "No mapped overlap"}
-          </dd>
-        </div>
-        <div>
-          <dt>Last evaluated (ClinVar)</dt>
-          <dd>{v.lastEvaluated.join("; ") || "Not reported"}</dd>
-        </div>
-        <div>
-          <dt>Gene symbols</dt>
-          <dd>{v.geneSymbols.join("; ")}</dd>
-        </div>
-      </dl>
-      {m.extent === "frameshift_anchor" && (
-        <p className="info-note">
-          This maps the frameshift anchor only. It does not describe the
-          downstream extent of the altered protein.
-        </p>
-      )}
-      <h3>Conditions, as reported</h3>
-      <ul className="conditions">
-        {v.conditions.map((c) => (
-          <li key={c}>{c}</li>
-        ))}
-      </ul>
-      <h3>Genomic coordinates</h3>
-      <div className="coordinate-list">
-        {v.genomicPositions.map((p, i) => (
-          <div key={i}>
-            <strong>{p.assembly || "Unspecified assembly"}</strong>
-            <span className="mono">
-              {p.chromosomeAccession || p.chromosome}: {p.start ?? "?"}–
-              {p.end ?? "?"}
-            </span>
-            <small>
-              VCF: {p.vcfPosition ?? "not available"} · {p.vcfReference ?? "?"}{" "}
-              → {p.vcfAlternate ?? "?"}
-            </small>
-          </div>
-        ))}
-      </div>
-      <h3>Source evidence</h3>
-      <p className="source-name mono">{v.names.join("\n")}</p>
-      <p>
-        Allele ID: {v.alleleIds.join(", ")}. Original ClinVar lines (header =
-        line 1):
-      </p>
-      <ul className="source-lines">
-        {v.sourceRecords.map((s) => (
-          <li key={s.line}>
-            <strong>Line {num(s.line)}</strong>
-            <code>{s.sha256}</code>
-          </li>
-        ))}
-      </ul>
-      <p className="muted small">
-        Hashes cover the original tab-separated row without its line ending. The
-        filtered TSV contains these line numbers and unchanged source fields.
-      </p>
-      <div className="detail-actions">
-        <ExternalLink href={v.url} className="button primary">
-          Open in ClinVar
-        </ExternalLink>
-        <a className="button" href="./data/clinvar-col7a1.tsv" download>
-          Download all source rows ↓
-        </a>
-      </div>
-    </dialog>
   );
 }
 function Sources({ data }) {
@@ -508,6 +114,7 @@ function Sources({ data }) {
 function Explorer({ data }) {
   const [initial] = useState(() => readExplorerState(location.search, data));
   const [filters, setFilters] = useState(initial.filters);
+  const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState(initial.sort);
   const [page, setPage] = useState(initial.page);
   const [selected, setSelected] = useState(() => data.variants.find(v => v.variationId === initial.selectedId) || null);
@@ -585,7 +192,7 @@ function Explorer({ data }) {
   }
   function exportCsv() {
     const url = URL.createObjectURL(
-      new Blob([variantsCsv(results, data.protein.domains)], {
+      new Blob([variantsCsv(results, data.protein.domains, data)], {
         type: "text/csv;charset=utf-8;",
       }),
     );
@@ -616,7 +223,7 @@ function Explorer({ data }) {
           <ThemeToggle />
         </div>
       </header>
-      <main>
+      <main className="research-workspace">
         <section className="intro">
           <p className="eyebrow">HUMAN GENETICS / CHROMOSOME 3</p>
           <div className="intro-row">
@@ -624,12 +231,7 @@ function Explorer({ data }) {
               <h1>
                 COL7A1 variant explorer<span>.</span>
               </h1>
-              <p className="intro-description">
-                Explore clinical variation across collagen VII.
-                <br />
-                From ClinVar records to protein domains, with a traceable source
-                for every result.
-              </p>
+              <p className="intro-description">Explore collagen VII by region, inspect ClinVar evidence, and export the variants that matter to your research.</p>
             </div>
             <div className="gene-label">
               <span className="mono">Q02388</span>
@@ -638,10 +240,10 @@ function Explorer({ data }) {
             </div>
           </div>
         </section>
-        <p className="snapshot-note">Fixed research snapshot · Prepared October 27, 2026 · Does not update automatically.
-          <span> ClinVar release date is unknown. Classifications and domain positions are source records, not a clinical interpretation.</span>
+        <p className="snapshot-note"><strong>Fixed snapshot · Prepared {data.snapshot?.preparedDate || "date not recorded"}</strong>
+          <span> ClinVar release date: {data.sources.clinvar.releaseDate || "unknown"}. UniProt annotation: {data.protein.entryAudit.lastAnnotationUpdateDate}. No automatic refresh.</span>
         </p>
-        <section className="stats" aria-label="Dataset overview">
+        <section className="stats compact-stats" aria-label="Dataset overview">
           <div>
             <span>Unique variants</span>
             <strong>{num(data.summary.variants)}</strong>
@@ -668,31 +270,8 @@ function Explorer({ data }) {
             <small>Plus NC1, collagenous & NC2 regions</small>
           </div>
         </section>
-        <ProteinMap
-          protein={data.protein}
-          variants={results}
-          filters={filters}
-          onFilter={setFilter}
-          selected={selected}
-        />
-        <section className="panel table-panel" aria-labelledby="variants-title">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">CLINVAR RECORDS</p>
-              <h2 id="variants-title" tabIndex={-1}>
-                Explore the variants{" "}
-                <span className="count-pill">{num(results.length)}</span>
-              </h2>
-            </div>
-            <button
-              className="button"
-              onClick={exportCsv}
-              disabled={!results.length}
-            >
-              Export CSV <span aria-hidden="true">↓</span>
-            </button>
-          </div>
-          <div className="filter-area">
+          <section className="panel workspace-controls" aria-labelledby="filters-title">
+            <h2 id="filters-title" className="sr-only">Filter the research workspace</h2>
             <label className="search">
               <span aria-hidden="true">⌕</span>
               <input
@@ -707,7 +286,17 @@ function Explorer({ data }) {
               <kbd>/</kbd>
             </label>
             <p className="search-help" id="search-help">Search HGVS, rsIDs, conditions, or coordinates. Use <code>id:17423</code> for an exact variant ID, or <code>GRCh38 chr3:48566281</code> for a genomic position. Share this page’s URL to preserve your filters and selected evidence.</p>
-            <div className="filter-grid">
+            <div className="quick-filters">
+              <span className="workspace-result-count" aria-live="polite"><strong>{num(results.length)}</strong> matching variants</span>
+              <button className="evidence-preset" aria-pressed={filters.review === MULTIPLE_SUBMITTERS_REVIEW}
+                onClick={() => setFilter("review", filters.review === MULTIPLE_SUBMITTERS_REVIEW ? "" : MULTIPLE_SUBMITTERS_REVIEW)}>
+                Multiple submitters, no conflicts
+              </button>
+              <button className="text-button" onClick={clear} disabled={!active}>Clear filters</button>
+            </div>
+            <details className="advanced-filters" open={showFilters} onToggle={e => setShowFilters(e.currentTarget.open)}>
+              <summary>More filters <span>{[filters.significance, filters.domain, filters.review, filters.mapping, filters.type].filter(Boolean).length || ""}</span></summary>
+              <div className="filter-grid">
               <Select
                 label="Clinical significance"
                 value={filters.significance}
@@ -750,9 +339,47 @@ function Explorer({ data }) {
                 all="All types"
               />
             </div>
-          </div>
+              </details>
+            <div className="active-workspace-filters" aria-label="Active filters">
+              {filters.query && <button onClick={() => setFilter("query", "")}>Search: {filters.query} ×</button>}
+              {filters.significance && <button onClick={() => setFilter("significance", "")}>{filters.significance === UNCLASSIFIED ? "Not reported" : filters.significance} ×</button>}
+              {filters.domain && <button onClick={() => setFilter("domain", "")}>{data.protein.domains.find(d => d.id === filters.domain)?.label} ×</button>}
+              {filters.review && <button onClick={() => setFilter("review", "")}>Review: {filters.review} ×</button>}
+              {filters.mapping && <button onClick={() => setFilter("mapping", "")}>{filters.mapping === "mapped" ? "Mapped" : "Unmapped"} ×</button>}
+              {filters.type && <button onClick={() => setFilter("type", "")}>{filters.type} ×</button>}
+              {filters.range && <button onClick={() => setFilter("range", null)}>aa {filters.range.join("–")} ×</button>}
+            </div>
+          </section>
+        <ProteinMap
+          protein={data.protein}
+          variants={results}
+          filters={filters}
+          onFilter={setFilter}
+          selected={selected}
+          onSelect={setSelected}
+        />
+        <div className="panel visual-summary-panel">
           <VisualSummary variants={results} allVariants={variants} protein={data.protein}
             filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} onClear={clear} />
+        </div>
+        <section className="panel table-panel" aria-labelledby="variants-title">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">CLINVAR RECORDS</p>
+              <h2 id="variants-title" tabIndex={-1}>
+                Explore the variants{" "}
+                <span className="count-pill">{num(results.length)}</span>
+              </h2>
+            </div>
+            <button
+              className="button"
+              title={`Export all ${num(results.length)} matching variants across every page`}
+              onClick={exportCsv}
+              disabled={!results.length}
+            >
+              Export CSV <span aria-hidden="true">↓</span>
+            </button>
+          </div>
           <div className="results-toolbar">
             <div aria-live="polite">
               <strong>{num(results.length)}</strong> of {num(variants.length)}{" "}
@@ -765,11 +392,7 @@ function Explorer({ data }) {
                   aa {filters.range[0]}–{filters.range[1]} ×
                 </button>
               )}
-              {active && (
-                <button className="text-button" onClick={clear}>
-                  Clear filters
-                </button>
-              )}
+
             </div>
             <label>
               Sort by{" "}
@@ -795,6 +418,7 @@ function Explorer({ data }) {
                 <tr>
                   <th scope="col">Variant / HGVS</th>
                   <th scope="col">Clinical significance</th>
+                  <th scope="col">Review & submitters</th>
                   <th scope="col">Domain / position</th>
                   <th scope="col">Conditions</th>
                   <th scope="col">ClinVar</th>
@@ -821,10 +445,8 @@ function Explorer({ data }) {
                     </td>
                     <td>
                       <Badge variant={v} />
-                      <span className="cell-secondary review-status">
-                        {v.reviewStatus.join("; ") || "No review status"}
-                      </span>
                     </td>
+                    <td><ReviewSummary variant={v} /></td>
                     <td>
                       <span
                         className={
@@ -901,6 +523,7 @@ function Explorer({ data }) {
         <VariantDetails
           variant={selected}
           protein={data.protein}
+          data={data}
           onClose={() => setSelected(null)}
         />
       )}

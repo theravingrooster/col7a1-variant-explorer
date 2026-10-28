@@ -93,3 +93,29 @@ test("rejects invalid evidence hashes and unsafe external link protocols", () =>
     assert.throws(() => validateDataset(data), /Invalid dataset:/);
   }
 });
+
+test("submitter counts retain missing and zero while rejecting invalid or duplicate counts", () => {
+  for (const counts of [[], [0], [2, 4]]) {
+    const data = fixture();
+    data.variants[0].numberSubmitters = counts;
+    assert.equal(validateDataset(data), data);
+  }
+  for (const counts of [null, [-1], [1.5], ["4"], [2, 2], [4, 2]]) {
+    const data = fixture();
+    data.variants[0].numberSubmitters = counts;
+    assert.throws(() => validateDataset(data), /numberSubmitters/);
+  }
+});
+
+test("snapshot preparation date is separate from an unknown source release date", () => {
+  assert.equal(snapshot.snapshot.preparedDate, "2026-10-27");
+  assert.equal(snapshot.sources.clinvar.releaseDate, null);
+  const unknown = fixture();
+  unknown.snapshot.preparedDate = null;
+  assert.equal(validateDataset(unknown), unknown);
+  for (const date of [undefined, "today", "2026-02-30", "2026-2-3"]) {
+    const data = fixture();
+    data.snapshot.preparedDate = date;
+    assert.throws(() => validateDataset(data), /snapshot.preparedDate/);
+  }
+});

@@ -66,6 +66,21 @@ class SnapshotVerificationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Normalization mismatch'):
             self.check()
 
+    def test_invented_submitter_counts_are_rejected(self):
+        self.modify_json(lambda data: data['variants'][0].update(numberSubmitters=[4]))
+        with self.assertRaisesRegex(ValueError, 'Normalization mismatch'):
+            self.check()
+
+    def test_preparation_date_never_defaults_to_current_date(self):
+        data = json.loads(self.json_path.read_text())
+        self.assertIsNone(data['snapshot']['preparedDate'])
+        self.assertIsNone(data['sources']['clinvar']['releaseDate'])
+        with contextlib.redirect_stdout(io.StringIO()):
+            data = process(self.raw, self.root / 'Q02388.json', self.root / 'public/data', prepared_date='2026-10-27')
+        self.assertEqual(data['snapshot']['preparedDate'], '2026-10-27')
+        self.assertIsNone(data['sources']['clinvar']['releaseDate'])
+        self.check()
+
     def test_inaccurate_summary_is_rejected(self):
         self.modify_json(lambda data: data['summary']['significanceGroups'].update(pathogenic=999))
         with self.assertRaisesRegex(ValueError, 'Significance summary mismatch'):

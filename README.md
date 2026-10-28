@@ -52,7 +52,7 @@ To publish a newer data snapshot, first replace the local source files, run `npm
 Regenerate deterministically with `npm run data`. For an uncompressed or filtered summary with the same column headers:
 
 ```sh
-python3 scripts/process_data.py --clinvar variant_summary.txt
+python3 scripts/process_data.py --clinvar variant_summary.txt --prepared-date YYYY-MM-DD
 npm run verify:data
 ```
 
@@ -79,7 +79,7 @@ Example: variation **17423**, `c.8393T>A (p.Met2798Lys)`, maps to **NC2** at res
 
 ## Interface
 
-Search HGVS, IDs, conditions, or genomic coordinates; combine classification, domain, review, mapping, and type filters. The map groups variants into 25-residue bins at their first reported residue; bar/domain selections filter the table by interval overlap. Open a variant to inspect source lines and hashes. Exact searches support `id:17423`, `allele:32462`, `rs121912828`, accession-qualified HGVS, and assembly-specific coordinates such as `GRCh38 chr3:48566281`. Coordinate searches use inclusive interval overlap and keep assembly/reference matching on the same source record. Plain text searches retain their original partial-match behavior.
+Search HGVS, IDs, conditions, or genomic coordinates; combine classification, domain, review, mapping, and type filters. The primary map starts with 25-residue density bins. Selecting a domain or bin filters the workspace and zooms to that region; a custom inclusive residue range is also available. Smaller filtered sets (at most 180 variants, with collision-safe marker lanes) display individual colored markers. Hover or keyboard focus shows HGVS, clinical significance, review status and submitter count; clicking or pressing Enter opens evidence. Dense sets remain binned. Intervals crossing the visible boundary count once at its left edge; hollow markers indicate a clipped start. Open a variant to inspect source lines and hashes. Exact searches support `id:17423`, `allele:32462`, `rs121912828`, accession-qualified HGVS, and assembly-specific coordinates such as `GRCh38 chr3:48566281`. Coordinate searches use inclusive interval overlap and keep assembly/reference matching on the same source record. Plain text searches retain their original partial-match behavior.
 
 Filters, sorting, page, and selected evidence are stored in the URL, so views can be bookmarked or shared. Unknown or malformed URL values are ignored. A skip link and arrow-key chart navigation make the explorer usable without tabbing through every bar. Pagination is available above and below the table and returns focus to the results heading.
 
@@ -90,11 +90,11 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 55 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 72 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
-For the 17 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
+For the 20 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
 
 ```sh
 npx playwright install chromium
@@ -111,10 +111,21 @@ See [AUDIT.md](AUDIT.md) for the review findings, fixes, and verification limits
 
 ## Visual summaries and display theme
 
-The summary above the results table contains an exact clinical-significance count chart and grouped bars for NC1, collagenous and NC2, colored by the same source categories. Both use the complete filtered result set, including records beyond the visible page. They respond to every search, review, mapping, type, domain and residue-range filter; changing sort/page does not change counts.
+The summary between the map and results table contains an exact clinical-significance count chart and grouped bars for NC1, collagenous and NC2, colored by the same source categories. Both use the complete filtered result set, including records beyond the visible page. They respond to every search, review, mapping, type, domain and residue-range filter; changing sort/page does not change counts.
 
 Click a classification bar to toggle that filter, a domain heading to toggle the domain, or a domain/category bar to apply both together. Existing search and other filters remain active. Click the selected bar again or use the filter chips to clear it. Zero categories stay visible to keep the chart layout stable. The 38 records with no classification have a distinct “Not reported” filter, separate from the source’s explicit no-classification label. Chart selections persist in shareable URLs.
 
 Each domain uses the same numeric scale. Domain totals count unique variants; grouped bars avoid implying that multi-classification source labels are mutually exclusive. Unmapped and mapped-outside-region counts are shown explicitly. The protein map now has a count axis, larger region labels, visible coordinate ranges and touch-friendly region filters; its last partial bin uses its actual residue width.
 
 The header’s light/dark toggle defaults to the system preference, persists a manual choice on this device and preserves all explorer state. An external initializer applies the choice before styles load without weakening the Content Security Policy. Charts, table, source panels and evidence dialogs share the selected palette. Rendering uses native HTML/CSS and SVG; no charting dependency was added.
+
+
+## Evidence-focused research workflow
+
+Compact filters precede the primary protein map. The exact “criteria provided, multiple submitters, no conflicts” quick filter matches **928** records in this snapshot; it composes with all existing filters and persists in shared URLs. Review status is not inferred from the submitter count: 217 records labeled “single submitter” report more than one aggregate submitter.
+
+Each normalized variant includes `numberSubmitters`: sorted distinct, nonnegative `NumberSubmitters` source values. Duplicate genome-assembly rows are never added together. Zero, missing values, and future differing source counts remain distinct. The table has a dedicated review/submitter column, while the detail view groups evidence and mapping facts and keeps genomic rows and source hashes in expandable sections.
+
+`data.snapshot.preparedDate` records preparation of the supplied files (**2026-10-27**), not the current deployment date or an inferred ClinVar release. New processing runs use an explicit `--prepared-date YYYY-MM-DD`; omit it when that date is not known. UniProt's annotation date remains 2026-09-02. Raw TSV and UniProt source files are unchanged.
+
+Filtered CSV export includes all matching pages and retains c./p. HGVS, clinical significance, exact review status, submitter counts, domain overlaps, inclusive protein positions, ClinVar ID/URL, conditions, genomic coordinates, evaluation dates, source lines/hashes, snapshot dates and mapping provenance. No new remote data source or runtime request was added.

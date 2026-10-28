@@ -1,15 +1,16 @@
 import { UNCLASSIFIED } from "./chart-data.mjs";
+import { submitterCounts } from "./evidence.mjs";
 
 export const GROUPS = {
   pathogenic: {
     label: "Pathogenic / likely pathogenic",
     short: "Pathogenic",
-    color: "#b8503e",
+    color: "#bc4548",
   },
   uncertain: {
     label: "Uncertain significance",
     short: "Uncertain",
-    color: "#b78a30",
+    color: "#bd671f",
   },
   conflicting: {
     label: "Conflicting classifications",
@@ -19,7 +20,7 @@ export const GROUPS = {
   benign: {
     label: "Benign / likely benign",
     short: "Benign",
-    color: "#458985",
+    color: "#34835a",
   },
   other: { label: "Other / not classified", short: "Other", color: "#88929b" },
 };
@@ -195,7 +196,7 @@ export function csvCell(value) {
   if (/^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
   return `"${text.replaceAll('"', '""')}"`;
 }
-export function variantsCsv(variants, domains) {
+export function variantsCsv(variants, domains, context = {}) {
   const labels = new Map(domains.map((d) => [d.id, d.label]));
   const header = [
     "Variation ID",
@@ -220,6 +221,13 @@ export function variantsCsv(variants, domains) {
     "ClinVar URL",
     "Source lines",
     "Source row SHA256",
+    "Number of submitters (source counts)",
+    "Snapshot prepared date",
+    "ClinVar release date",
+    "Protein mapping method",
+    "Protein reference",
+    "Protein reference URL",
+    "Protein mapping provenance",
   ];
   const rows = variants.map((v) => [
     v.variationId,
@@ -249,6 +257,13 @@ export function variantsCsv(variants, domains) {
     v.url,
     v.sourceRecords.map((s) => s.line).join("; "),
     v.sourceRecords.map((s) => s.sha256).join("; "),
+    submitterCounts(v).join("; "),
+    context.snapshot?.preparedDate || "Not recorded",
+    context.sources?.clinvar?.releaseDate || "Unknown",
+    v.proteinMapping.method || "",
+    v.proteinMapping.status === "mapped" ? (context.protein?.accession || "Q02388") : "",
+    context.protein?.url || "",
+    context.processing?.mapping || "",
   ]);
   return (
     "\uFEFF" +

@@ -12,6 +12,18 @@ let browser, context, page, errors;
 const search = () => page.getByRole("searchbox", { name: "Search variants" });
 const tableRows = () => page.locator("tbody tr");
 const ids = () => page.locator("tbody .clinvar-link").allTextContents();
+const multipleSubmittersReview = "criteria provided, multiple submitters, no conflicts";
+async function openFilters() {
+  const details = page.locator("details").filter({
+    has: page.getByLabel("Clinical significance", { exact: true }),
+  });
+  if (await details.count() && await details.getAttribute("open") === null)
+    await details.locator("summary").click();
+}
+async function selectFilter(label, value) {
+  await openFilters();
+  await page.getByLabel(label, { exact: true }).selectOption(value);
+}
 async function expectCount(count) {
   await page.waitForFunction((expected) =>
     Number(document.querySelector(".count-pill")?.textContent.replaceAll(",", "")) === expected,
@@ -93,13 +105,13 @@ test("classification, domain and mapping filters combine and reset correctly", a
   const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
   const expected = source.variants.filter(v =>
     v.clinicalSignificance.includes("Pathogenic/Likely pathogenic") && v.proteinMapping.domainIds.includes(nc2));
-  await page.getByLabel("Clinical significance", { exact: true }).selectOption("Pathogenic/Likely pathogenic");
-  await page.getByLabel("Protein domain", { exact: true }).selectOption(nc2);
+  await selectFilter("Clinical significance", "Pathogenic/Likely pathogenic");
+  await selectFilter("Protein domain", nc2);
   await expectCount(expected.length);
-  await page.getByLabel("Protein mapping", { exact: true }).selectOption("unmapped");
+  await selectFilter("Protein mapping", "unmapped");
   await expectCount(0);
   await page.getByRole("button", { name: "Clear all filters", exact: true }).click();
-  await page.getByLabel("Protein mapping", { exact: true }).selectOption("unmapped");
+  await selectFilter("Protein mapping", "unmapped");
   await expectCount(source.summary.unmapped);
   assert.equal(await page.locator("tbody .domain-text").count(), 0);
 });
@@ -143,7 +155,7 @@ test("a grouped domain/classification bar applies both filters and clears the se
 });
 
 test("summary charts count all filtered pages and show truthful zero-result counts", async () => {
-  await page.getByLabel("Clinical significance", { exact: true }).selectOption("Pathogenic");
+  await selectFilter("Clinical significance", "Pathogenic");
   await expectCount(674);
   assert.equal(await tableRows().count(), 50);
   assert.match(await page.locator(".summary-heading").innerText(), /674 variants across all pages/);
@@ -226,18 +238,28 @@ test("theme initially follows system preference until the user chooses a mode", 
   assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
 });
 
-test("protein chart domain and residue selections work with mouse and keyboard", async () => {
+test("protein map leads the charts and table, with domain and keyboard range selection", async () => {
+  const order = await page.evaluate(() => {
+    const map = document.querySelector(".protein-panel"), summary = document.querySelector(".summary-panel"), table = document.querySelector(".table-panel");
+    return {
+      mapBeforeSummary: !!(map.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING),
+      summaryBeforeTable: !!(summary.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING),
+    };
+  });
+  assert.deepEqual(order, { mapBeforeSummary: true, summaryBeforeTable: true });
+  assert.ok((await page.locator(".protein-map").boundingBox()).height >= 350, "The desktop map is the main visual workspace");
   const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
   const expected = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2));
-  const domain = page.getByRole("button", { name: /^Filter NC2,/ });
+  const domain = page.locator(".map-region-guide").getByRole("button", { name: /^NC2/ });
   await domain.click();
   await expectCount(expected.length);
   assert.equal(await domain.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.getByLabel("Protein domain", { exact: true }).inputValue(), nc2);
   await domain.press("Enter");
   await expectCount(source.summary.variants);
   assert.equal(await domain.getAttribute("aria-pressed"), "false");
-  const chartStops = page.locator(".histogram-bin[tabindex='0']");
-  assert.equal(await chartStops.count(), 1, "Histogram should occupy one tab stop");
+  const chartStops = page.locator("[data-bin][tabindex='0']");
+  assert.equal(await chartStops.count(), 1, "Density bins should occupy one tab stop");
   await chartStops.focus();
   const firstLabel = await page.locator(":focus").getAttribute("aria-label");
   await page.keyboard.press("ArrowRight");
@@ -247,7 +269,74 @@ test("protein chart domain and residue selections work with mouse and keyboard",
   await page.keyboard.press("Enter");
   await expectCount(source.variants.filter(v => v.proteinMapping.status === "mapped" &&
     v.proteinMapping.start <= Number(end) && v.proteinMapping.end >= Number(start)).length);
-  assert.equal(await page.locator(":focus").getAttribute("aria-pressed"), "true");
+  await page.waitForFunction(expected => new URLSearchParams(location.search).get("range") === expected, `${start}-${end}`);
+  await page.getByRole("button", { name: "Reset map region", exact: true }).click();
+  await expectCount(source.summary.variants);
+});
+
+test("a variant marker exposes hover and keyboard evidence and opens the full record", async () => {
+  await query("id:17423", 1);
+  const marker = page.getByRole("button", { name: /^Open variant 17423:/ });
+  assert.equal(await marker.count(), 1);
+  await marker.hover();
+  const tooltip = page.getByRole("tooltip");
+  await tooltip.waitFor();
+  assert.match(await tooltip.innerText(), /c\.8393T>A/);
+  assert.match(await tooltip.innerText(), /p\.Met2798Lys/);
+  assert.match(await tooltip.innerText(), /Pathogenic/);
+  assert.match(await tooltip.innerText(), /multiple submitters, no conflicts/);
+  await marker.focus();
+  assert.equal(await tooltip.isVisible(), true);
+  await marker.press("Escape");
+  await tooltip.waitFor({ state: "hidden" });
+  await marker.press("Tab");
+  await marker.focus();
+  await tooltip.waitFor();
+  await marker.press("Enter");
+  const dialog = page.getByRole("dialog");
+  await dialog.waitFor();
+  assert.match(await dialog.innerText(), /CLINVAR VARIATION 17423/);
+  assert.match(await dialog.innerText(), /submitter/i);
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(await marker.evaluate(el => el === document.activeElement), true);
+});
+
+test("custom residue ranges validate, filter inclusively and retain unmapped records on demand", async () => {
+  const start = page.getByLabel("Range start (amino acid)", { exact: true });
+  const end = page.getByLabel("Range end (amino acid)", { exact: true });
+  await start.fill("2800");
+  await end.fill("2798");
+  await page.getByRole("button", { name: "Apply residue range", exact: true }).click();
+  await page.getByRole("alert").waitFor();
+  await expectCount(source.summary.variants);
+  await start.fill("2798");
+  await end.fill("2798");
+  await page.getByRole("button", { name: "Apply residue range", exact: true }).click();
+  const expected = source.variants.filter(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start <= 2798 && v.proteinMapping.end >= 2798);
+  await expectCount(expected.length);
+  assert.match(await page.locator(".summary-heading").innerText(), new RegExp(`${expected.length} variants across all pages`));
+  await page.getByRole("button", { name: "Show unmapped variants", exact: true }).click();
+  await expectCount(source.summary.unmapped);
+  assert.equal(await page.getByLabel("Protein mapping", { exact: true }).inputValue(), "unmapped");
+  await page.waitForFunction(() => !new URLSearchParams(location.search).has("range") && !new URLSearchParams(location.search).has("domain"));
+});
+
+test("the consensus preset uses exact review status and keeps graphs and evidence in sync", async () => {
+  const expected = source.variants.filter(v => v.reviewStatus.includes(multipleSubmittersReview));
+  assert.equal(expected.length, 928);
+  const preset = page.getByRole("button", { name: "Multiple submitters, no conflicts", exact: true });
+  await preset.click();
+  await expectCount(expected.length);
+  assert.equal(await preset.getAttribute("aria-pressed"), "true");
+  assert.equal(await page.getByLabel("Review status", { exact: true }).inputValue(), multipleSubmittersReview);
+  assert.match(await page.locator(".summary-heading").innerText(), /928 variants across all pages/);
+  assert.deepEqual((await ids()).map(x => Number(x.replace(/\D/g, ""))), expected.slice(0, 50).map(v => v.variationId));
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(928);
+  assert.equal(await preset.getAttribute("aria-pressed"), "true");
+  await preset.click();
+  await expectCount(source.summary.variants);
 });
 
 test("sort and both pagination controls preserve the correct records", async () => {
@@ -291,6 +380,17 @@ test("evidence dialog retains inside clicks, closes via Escape/backdrop and rest
   const dialog = page.getByRole("dialog");
   await dialog.waitFor();
   assert.match(await dialog.innerText(), /aa 2798[\s\S]*NC2/);
+  assert.equal(await dialog.getByRole("heading", { name: "Review & submitters", exact: true }).isVisible(), true);
+  assert.match(await dialog.locator(".review-source-label").innerText(), /criteria provided, multiple submitters, no conflicts/);
+  const selected = source.variants.find(v => v.variationId === 17423);
+  assert.match(await dialog.locator(".submitter-count").innerText(), new RegExp(String(selected.numberSubmitters[0])));
+  const provenance = dialog.locator("details").filter({ has: page.locator("summary", { hasText: "Source evidence & mapping" }) });
+  assert.equal(await provenance.getAttribute("open"), null, "Technical evidence starts collapsed");
+  await provenance.locator("summary").click();
+  assert.deepEqual(await provenance.locator(".source-lines code").allTextContents(), selected.sourceRecords.map(row => row.sha256));
+  assert.match(await provenance.innerText(), /2026-10-27/);
+  assert.match(await provenance.innerText(), /Unknown in supplied source/);
+  await provenance.locator("summary").click();
   const box = await dialog.boundingBox();
   await page.mouse.click(box.x + 8, box.y + 8);
   assert.equal(await dialog.isVisible(), true, "Clicking dialog padding must not dismiss it");
@@ -304,10 +404,11 @@ test("evidence dialog retains inside clicks, closes via Escape/backdrop and rest
   assert.equal(await opener.evaluate(el => el === document.activeElement), true);
 });
 
-test("CSV download contains every filtered record beyond the current page", async () => {
-  const expected = source.variants.filter(v => v.clinicalSignificance.includes("Pathogenic"));
+test("CSV exports all combined-filter results with evidence, positions and snapshot context", async () => {
+  const expected = source.variants.filter(v => v.clinicalSignificance.includes("Pathogenic") && v.reviewStatus.includes(multipleSubmittersReview));
   assert.ok(expected.length > 50);
-  await page.getByLabel("Clinical significance", { exact: true }).selectOption("Pathogenic");
+  await selectFilter("Clinical significance", "Pathogenic");
+  await page.getByRole("button", { name: "Multiple submitters, no conflicts", exact: true }).click();
   await expectCount(expected.length);
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: /Export CSV/ }).click();
@@ -315,9 +416,29 @@ test("CSV download contains every filtered record beyond the current page", asyn
   assert.match(download.suggestedFilename(), /\.csv$/);
   const rows = csvRows(await readFile(await download.path(), "utf8"));
   assert.equal(rows.length, expected.length + 1);
-  assert.ok(rows[0].includes("Source row SHA256"));
+  const column = name => {
+    const index = rows[0].indexOf(name);
+    assert.ok(index >= 0, `CSV must include ${name}`);
+    return index;
+  };
+  for (const name of ["Coding HGVS", "Protein HGVS", "Clinical significance", "Review status", "Domains", "Protein start (1-based)", "Protein end (inclusive)", "Variation ID", "Conditions (as reported)", "ClinVar URL", "Source row SHA256"])
+    column(name);
+  const submitters = column("Number of submitters (source counts)");
+  const prepared = column("Snapshot prepared date");
+  const release = column("ClinVar release date");
+  const method = column("Protein mapping method");
+  const byId = new Map(expected.map(v => [v.variationId, v]));
   assert.deepEqual(rows.slice(1).map(row => Number(row[0])).sort((a, b) => a - b), expected.map(v => v.variationId).sort((a, b) => a - b));
   assert.ok(rows.every(row => row.length === rows[0].length));
+  for (const row of rows.slice(1)) {
+    const variant = byId.get(Number(row[0]));
+    assert.equal(row[submitters], variant.numberSubmitters.join("; "));
+    assert.equal(row[prepared], source.snapshot.preparedDate);
+    assert.equal(row[release], "Unknown");
+    assert.equal(row[column("Clinical significance")], variant.clinicalSignificance.join("; "));
+    assert.equal(row[column("Review status")], variant.reviewStatus.join("; "));
+    if (variant.proteinMapping.status === "mapped") assert.equal(row[method], "explicit_protein_hgvs");
+  }
 });
 
 test("source downloads retain the committed evidence and valid external links", async () => {
@@ -353,6 +474,10 @@ test("skip link and search shortcut avoid the chart; mobile widths keep page and
   assert.equal(await search().evaluate(el => el === document.activeElement), true);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    await query("", source.summary.variants);
+    await expectNoPageOverflow();
+    const themeToggle = page.getByRole("button", { name: width < 768 ? "Switch to dark mode" : "Switch to light mode", exact: true });
+    if (await themeToggle.isVisible()) await themeToggle.click();
     await expectNoPageOverflow();
     await query("id:17423", 1);
     await page.getByRole("button", { name: "View evidence", exact: true }).click();

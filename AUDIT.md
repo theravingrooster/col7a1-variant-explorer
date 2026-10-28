@@ -38,3 +38,14 @@ Scope: deployed COL7A1 explorer, React UI, search/filter/export logic, protein/s
 - Positional mapping and domain overlap are not clinical interpretation. Original mapping rules and classifications were preserved.
 - Actual mobile rendering, full automated browser execution and assistive-technology behavior require confirmation in an environment that allows browser automation. Responsive styles were reviewed; do not treat that as device testing.
 - The full 13 MB research JSON is still loaded once per session. A versioned, lightweight index with lazy evidence loading is a possible future performance improvement; it should preserve exports and source integrity.
+
+
+## Research workflow update — October 28, 2026
+
+- Promoted the protein map into a larger primary workspace with domain/range zoom, adaptive density, individual variant markers, hover/focus evidence, keyboard navigation, and explicit unmapped access.
+- Retained both synchronized summary charts between the map and table.
+- Added source submitter counts without summing assembly duplicates; exact review-status preset and dedicated evidence column. Detail view groups key facts and preserves expanded provenance.
+- Added structured preparation-date metadata, preserving the original preparation date and unknown ClinVar release date.
+- Enriched filtered CSV with submitter counts and snapshot/mapping provenance.
+- 72 unit/regression tests pass; production build and complete committed-snapshot verification pass (13,036 rows; 6,522 variants; 4,268 mappings).
+- Browser regression suite expanded to 20 cases. The local browser process remains unavailable in this execution environment; hosted browser interaction is checked separately.
