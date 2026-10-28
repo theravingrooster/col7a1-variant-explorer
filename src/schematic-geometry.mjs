@@ -5,9 +5,9 @@ import { createProteinView, projectProteinPoint } from "./protein-view.mjs";
 const TAU = Math.PI * 2;
 const DEPTH_LAYERS = 12;
 const REGIONS = {
-  NC1: { from: 52, to: 192, turns: 2, steps: 54 },
-  Collagenous: { from: 192, to: 438, turns: 5, steps: 90 },
-  NC2: { from: 438, to: 494, turns: 1, steps: 30 },
+  NC1: { from: 52, to: 192, turns: 2, steps: 108 },
+  Collagenous: { from: 192, to: 438, turns: 5, steps: 180 },
+  NC2: { from: 438, to: 494, turns: 1, steps: 60 },
 };
 
 export function schematicRegions(protein) {

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GROUPS, formatNumber as num, positionLabel } from "./data-utils.mjs";
-import { densityBins, mapWindow, variantsInWindow, markerLayout, validMapRange, mapTicks, MARKER_LIMIT, regionEvidence } from "./map-data.mjs";
+import { densityBins, mapWindow, variantsInWindow, markerLayout, validMapRange, mapTicks, MAP_GROUPS, MARKER_LIMIT, regionEvidence } from "./map-data.mjs";
 import ProteinSchematic from "./ProteinSchematic.jsx";
 import "./protein-map.css";
 
 const X = 42, WIDTH = 816, PLOT_TOP = 174;
 const color = key => `var(--significance-${key}, ${GROUPS[key]?.color || GROUPS.other.color})`;
+const legendLabels = { pathogenic: "Pathogenic / likely", uncertain: "VUS", conflicting: "Conflicting", benign: "Benign / likely", other: "Other" };
 const significance = v => v.clinicalSignificance.join(" / ") || "Not reported";
 const submitters = v => Array.isArray(v.numberSubmitters) && v.numberSubmitters.length
   ? `${v.numberSubmitters.join(" / ")} submitter${v.numberSubmitters.length === 1 && v.numberSubmitters[0] === 1 ? "" : "s"} (source)`
@@ -27,11 +28,11 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
   const mapped = useMemo(() => variants.filter(v => v.proteinMapping.status === "mapped"), [variants]);
   const visible = useMemo(() => variantsInWindow(mapped, range), [mapped, range]);
   const { bins, binSize } = useMemo(() => densityBins(visible, range, 60), [visible, range]);
+  const groupCounts = useMemo(() => Object.fromEntries(MAP_GROUPS.map(key => [key, bins.reduce((total, bin) => total + bin.counts[key], 0)])), [bins]);
   const layout = useMemo(() => visible.length <= MARKER_LIMIT ? markerLayout(visible, range, WIDTH) : null, [visible, range]);
   const markerMode = visible.length > 0 && layout && layout.lanes <= 9;
   const regionPreviews = useMemo(() => new Map(protein.domains.map(d => [d.id, regionEvidence(variants, d, 1)])), [variants, protein.domains]);
   const [modePreference, setModePreference] = useState("auto");
-  const [showSignificance, setShowSignificance] = useState(false);
   const [showRange, setShowRange] = useState(false);
   const markersShown = markerMode && modePreference !== "density";
   const [hovered, setHovered] = useState(null);
@@ -170,7 +171,7 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
         </div>
         <div className="map-tools">
           <div className="map-display-controls">
-            {!markersShown && <button className="map-color-toggle" aria-pressed={showSignificance} onClick={() => setShowSignificance(!showSignificance)}><span aria-hidden="true" className={showSignificance ? "color-toggle-dot is-colored" : "color-toggle-dot"} />Color by significance</button>}
+            <span className="map-display-note">{markersShown ? "Each marker is one variant" : "Stacked by clinical significance"}</span>
             {markerMode && <button className="text-button" aria-pressed={!markersShown} onClick={() => { setModePreference(markersShown ? "density" : "auto"); setHovered(null); }}>{markersShown ? "Show density" : "Show individual variants"}</button>}
           </div>
           <button className="text-button range-disclosure" aria-expanded={showRange} aria-controls="residue-range-controls" onClick={() => setShowRange(!showRange)}>Set residue range <span aria-hidden="true">{showRange ? "−" : "+"}</span></button>
@@ -225,22 +226,29 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
                 const barX = x(bin.start), barWidth = Math.max(1, (bin.end - bin.start + 1) / span * WIDTH - 3);
                 return <g key={bin.start} role="button" tabIndex={focusedIndex === index ? 0 : -1} data-bin={index} className="histogram-bin"
                   aria-pressed={filters.range?.[0] === bin.start && filters.range?.[1] === bin.end}
-                  aria-label={`Filter amino acids ${bin.start} to ${bin.end}, ${bin.total} variants`}
+                  aria-label={`Filter amino acids ${bin.start} to ${bin.end}, ${bin.total} variants${MAP_GROUPS.filter(key => bin.counts[key] > 0).map(key => `; ${GROUPS[key].label}: ${bin.counts[key]}`).join("")}`}
                   aria-describedby={hovered?.kind === "bin" && hovered.index === index ? tooltipDescription : undefined}
                   onClick={() => chooseBin(bin)} onKeyDown={e => navigate(e, index, "bin", () => chooseBin(bin))}
                   onMouseEnter={e => reveal({ kind: "bin", index }, e)} onMouseLeave={hideAfterPointerLeaves}
                   onFocus={e => { reveal({ kind: "bin", index }, e); setFocused(index); }} onBlur={() => setHovered(null)}>
                   <rect x={barX} y={PLOT_TOP} width={barWidth + 3} height={plotBottom - PLOT_TOP} fill="transparent" />
-                  {showSignificance ? Object.keys(GROUPS).map(key => {
+                  {MAP_GROUPS.map(key => {
                     const height = bin.counts[key] / max * (plotBottom - PLOT_TOP); cumulative += height;
                     return <rect key={key} data-density-group={key} x={barX} y={plotBottom - cumulative} width={barWidth} height={height} fill={color(key)} />;
-                  }) : <rect className="density-total" x={barX} y={plotBottom - bin.total / max * (plotBottom - PLOT_TOP)} width={barWidth} height={bin.total / max * (plotBottom - PLOT_TOP)} rx="2" />}
+                  })}
+                  <rect className="density-outline" x={barX} y={plotBottom - bin.total / max * (plotBottom - PLOT_TOP)} width={barWidth} height={bin.total / max * (plotBottom - PLOT_TOP)} fill="none" />
                 </g>;
               })}
               {!visible.length && <text x={X + WIDTH / 2} y={PLOT_TOP + 50} textAnchor="middle" className="map-empty-label">No mapped variants in these results</text>}
               <line x1={X} x2={X + WIDTH} y1={plotBottom} y2={plotBottom} className="map-baseline" />
             </svg>
           </div>
+        </div>
+        <div className="map-significance-legend" role="group" aria-label="Clinical significance of mapped variants in view">
+          <p>Mapped variants in view</p>
+          <ul>{MAP_GROUPS.map(key => <li key={key} data-map-significance={key} data-count={groupCounts[key]} aria-label={`${GROUPS[key].label}: ${num(groupCounts[key])} mapped variants`}>
+            <i aria-hidden="true" style={{ background: color(key) }} /><span title={GROUPS[key].label}>{legendLabels[key]}</span><strong>{num(groupCounts[key])}</strong>
+          </li>)}</ul>
         </div>
         <div className="map-context-line"><span className="map-context-dot" aria-hidden="true" />{linkedPosition ? <span>{schematicHover?.label || (hovered?.kind === "region" ? hoveredItem?.label : "Linked residues")} · aa {num(linkedPosition.start)}–{num(linkedPosition.end)}</span> : <span>Hover a region to highlight it in both views.</span>}</div>
         <div className="map-summary"><span><strong>{num(visible.length)}</strong> mapped variants <span className="muted">/ {num(variants.length)} results</span></span>
@@ -253,12 +261,15 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
         {(hoveredItem.clippedStart || hoveredItem.clippedEnd) && <p className="map-tooltip-note">Reported interval extends beyond this view.</p>}</>
         : <><strong>{hovered.kind === "region" ? `${hoveredItem.label} · ` : ""}aa {num(hoveredItem.start)}–{num(hoveredItem.end)}</strong>
           <p className="map-tooltip-note">{num(hoveredItem.total)} {hovered.kind === "region" ? "matching variants" : "variants counted"} · Select to focus</p>
+          {hovered.kind === "bin" && <dl className="map-count-breakdown" aria-label="Clinical significance counts">{MAP_GROUPS.filter(key => hoveredItem.counts[key] > 0).map(key => <div key={key}>
+            <dt><i aria-hidden="true" style={{ background: color(key) }} />{legendLabels[key]}</dt><dd>{num(hoveredItem.counts[key])}</dd>
+          </div>)}</dl>}
           {hoveredItem.samples.slice(0, 1).map(v => <VariantPreview key={v.variationId} variant={v} />)}
           {hoveredItem.total > 1 && <p className="map-tooltip-note">Example 1 of {num(hoveredItem.total)}. Open the region for all records.</p>}
         </>}
     </div>}
     <details className="map-reading-notes"><summary>How to read this map</summary><div>
-      <p id="map-instructions">Each dot is one variant; horizontal lines show reported spans. Density counts each variant once at its first reported residue, or the left edge when its interval crosses into view. Filters use interval overlap. Frameshifts show only their reported anchor. Use left/right arrows, Home/End, and Enter to explore; Escape dismisses the tooltip.</p>
+      <p id="map-instructions">Each dot is one variant; horizontal lines show reported spans. Stacked bars show counts by clinical significance, with total height showing all variants in a bin. VUS means uncertain significance; pathogenic and benign groups each include their likely classifications. Density counts each variant once at its first reported residue, or the left edge when its interval crosses into view. Filters use interval overlap. Frameshifts show only their reported anchor. Use left/right arrows, Home/End, and Enter to explore; Escape dismisses the tooltip.</p>
       <p>Mapping uses explicit protein HGVS linked to Q02388-1 with endpoint residues checked against its sequence. Domain boundaries are 1-based, inclusive UniProt intervals. The sequence map includes the signal peptide; the rotating schematic depicts the mature homotrimer without it. Domain overlap does not establish clinical effect.</p>
     </div></details>
   </section>;

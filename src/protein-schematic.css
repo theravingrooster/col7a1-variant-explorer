@@ -11,11 +11,11 @@
 .protein-schematic.is-dragging .schematic-canvas,.protein-schematic.is-dragging .schematic-strand { cursor:grabbing; }
 .schematic-interaction-hint { grid-column:1/-1; text-align:center; margin:0 0 18px; color:var(--text-muted); font-size:11px; line-height:1.6; }
 .schematic-strand { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:stroke; cursor:grab; }
-.schematic-strand.depth-0 { stroke:color-mix(in srgb,var(--domain-color) 62%,var(--surface-muted)); stroke-width:calc(6px * var(--protein-zoom)); }
-.schematic-strand.depth-1 { stroke:color-mix(in srgb,var(--domain-color) 82%,var(--surface-muted)); stroke-width:calc(6.5px * var(--protein-zoom)); }
-.schematic-strand.depth-2 { stroke:var(--domain-color); stroke-width:calc(7px * var(--protein-zoom)); }
+.schematic-strand.depth-0 { stroke:color-mix(in srgb,var(--domain-color) 70%,var(--surface-muted)); stroke-width:calc(2.2px * var(--protein-zoom)); }
+.schematic-strand.depth-1 { stroke:color-mix(in srgb,var(--domain-color) 85%,var(--surface-muted)); stroke-width:calc(2.5px * var(--protein-zoom)); }
+.schematic-strand.depth-2 { stroke:var(--domain-color); stroke-width:calc(2.8px * var(--protein-zoom)); }
 .has-highlight .schematic-strand:not(.is-linked) { opacity:.55; }
-.schematic-strand.is-linked { stroke:var(--domain-color); stroke-width:calc(9px * var(--protein-zoom)); }
+.schematic-strand.is-linked { stroke:var(--domain-color); stroke-width:calc(3.6px * var(--protein-zoom)); }
 .schematic-strand.is-linked.depth-0 { opacity:.75; }
 .schematic-strand.is-linked.depth-1 { opacity:.9; }
 .schematic-view-tools { position:absolute; bottom:8px; right:8px; display:flex; align-items:center; gap:1px; padding:3px; background:var(--surface-raised); border:1px solid var(--border-color); border-radius:7px; box-shadow:0 2px 6px #00000006; }

@@ -12,10 +12,7 @@
 .map-tools { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
 .map-display-controls { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .map-tools .text-button { font-size:11px; min-height:34px; padding:4px 0; }
-.map-color-toggle { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--border-color); background:var(--surface-raised); border-radius:5px; padding:7px 9px; min-height:34px; font-size:11px; color:var(--text-muted); }
-.map-color-toggle[aria-pressed="true"] { border-color:var(--green); background:var(--surface-muted); color:var(--text-primary); }
-.color-toggle-dot { width:9px; height:9px; border-radius:50%; background:var(--map-density); }
-.color-toggle-dot.is-colored { background:conic-gradient(var(--significance-pathogenic) 0 33%,var(--significance-uncertain) 33% 66%,var(--significance-benign) 66%); }
+.map-display-note { color:var(--text-muted); font-size:11px; }
 .range-disclosure span { display:inline-block; width:12px; text-align:right; }
 .map-range-form { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; padding:12px; margin-bottom:12px; border-radius:5px; background:var(--surface-muted); }
 .map-range-form label { display:grid; gap:5px; font-size:10px; color:var(--text-muted); }
@@ -40,9 +37,15 @@
 .map-linked-highlight { fill:var(--chart-selected); opacity:.45; pointer-events:none; }
 .protein-workspace .map-count-grid { stroke:var(--chart-grid); stroke-width:1; }
 .protein-workspace .map-baseline { stroke:var(--chart-grid); stroke-width:1; }
-.density-total { fill:var(--map-density); transition:fill .15s; }
-.histogram-bin:hover .density-total, .histogram-bin:focus .density-total { fill:var(--text-primary); }
+.density-outline { stroke:transparent; stroke-width:1.5; pointer-events:none; }
+.histogram-bin:hover .density-outline, .histogram-bin:focus .density-outline { stroke:var(--text-primary); }
 .protein-workspace .histogram-bin:hover { opacity:1; }
+.map-significance-legend { padding:0 0 12px; }
+.map-significance-legend p { margin:0 0 7px; font-size:10px; color:var(--text-muted); }
+.map-significance-legend ul { display:flex; flex-wrap:wrap; gap:8px 20px; list-style:none; margin:0; padding:0; }
+.map-significance-legend li { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--text-muted); }
+.map-significance-legend i,.map-count-breakdown i { flex:none; width:8px; height:8px; border-radius:2px; }
+.map-significance-legend strong { font-weight:600; color:var(--text-primary); font-variant-numeric:tabular-nums; }
 .map-variant-marker { cursor:pointer; }
 .map-variant-marker:hover circle,.map-variant-marker:focus circle,.map-variant-marker.is-selected circle { stroke:var(--text-primary); stroke-width:3; }
 .map-variant-marker:focus-visible { outline:none; }
@@ -60,6 +63,10 @@
 .map-preview-variant small { color:var(--text-muted); font-size:10px; }
 .map-preview-variant i { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; }
 .map-tooltip-note { margin:6px 0 0; color:var(--text-muted); line-height:1.5; font-size:11px; }
+.map-count-breakdown { display:grid; gap:5px; margin:10px 0; font-size:11px; }
+.map-count-breakdown > div { display:flex; justify-content:space-between; gap:12px; }
+.map-count-breakdown dt { display:flex; align-items:center; gap:6px; color:var(--text-muted); }
+.map-count-breakdown dd { margin:0; font-weight:600; font-variant-numeric:tabular-nums; }
 .map-reading-notes { border-top:1px solid var(--border-color); padding:0 28px; }
 .map-reading-notes summary { min-height:42px; display:flex; align-items:center; gap:8px; width:fit-content; cursor:pointer; font-size:11px; color:var(--text-muted); list-style:none; }
 .map-reading-notes summary::-webkit-details-marker { display:none; }
@@ -80,7 +87,8 @@
   .protein-workspace .panel-heading { gap:12px; }
   .protein-workspace .panel-heading > .text-link { font-size:10px; white-space:nowrap; }
   .map-tools { gap:4px; }
-  .map-tools .text-button,.map-color-toggle { min-height:40px; }
+  .map-tools .text-button { min-height:40px; }
+  .map-significance-legend ul { gap:8px 14px; }
   .map-range-form input { width:75px; }
   .map-reading-notes { padding:0 16px; }
   .map-context-line { font-size:10px; }

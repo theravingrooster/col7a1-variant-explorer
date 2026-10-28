@@ -477,18 +477,21 @@ test("protein regions and subdomains expose rich pointer and keyboard tooltips",
   assert.equal(await filterControl("Protein domain").inputValue(), subdomain.id);
 });
 
-test("the quiet density view offers significance colors without changing the cohort", async () => {
+test("density stacks and legend show current significance counts before and after zoom", async () => {
   assert.equal(await page.locator(".variant-position-track").count(), 0, "The dense repeated position tracks no longer compete with the map");
   const bins = page.locator("[data-bin]");
   assert.ok(await bins.count() > 0 && await bins.count() <= 60, "The overview uses a bounded number of density bars");
-  const colorToggle = page.getByRole("button", { name: "Color by significance", exact: true });
-  assert.equal(await colorToggle.getAttribute("aria-pressed"), "false");
-  const initialURL = page.url();
-  const idsBefore = await ids();
-  await colorToggle.click();
-  assert.equal(await colorToggle.getAttribute("aria-pressed"), "true");
-  assert.deepEqual(await ids(), idsBefore);
-  assert.equal(page.url(), initialURL, "A presentation choice must not modify filter state");
+  assert.ok(await page.locator('[data-density-group="pathogenic"]').count() > 0, "Significance is visible without an opt-in toggle");
+  const legend = page.getByRole("group", { name: "Clinical significance of mapped variants in view", exact: true });
+  async function expectLegend(variants) {
+    for (const group of ["pathogenic", "uncertain", "conflicting", "benign", "other"]) {
+      const count = variants.filter(v => v.proteinMapping.status === "mapped" && v.significanceGroup === group).length;
+      const item = legend.locator(`[data-map-significance="${group}"]`);
+      assert.equal(Number(await item.getAttribute("data-count")), count);
+      assert.equal(await item.locator("strong").innerText(), count.toLocaleString("en-US"));
+    }
+  }
+  await expectLegend(source.variants);
   const stop = page.locator("[data-bin][tabindex='0']");
   assert.equal(await stop.count(), 1);
   await stop.focus();
@@ -497,6 +500,7 @@ test("the quiet density view offers significance colors without changing the coh
   await stop.press("Enter");
   const expected = source.variants.filter(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start <= Number(end) && v.proteinMapping.end >= Number(start));
   await expectCount(expected.length);
+  await expectLegend(expected);
   await page.waitForFunction(range => new URLSearchParams(location.search).get("range") === range, `${start}-${end}`);
   assert.ok(await page.locator("[data-marker]").count() > 0, "Zoom exposes individual variant markers");
 });
