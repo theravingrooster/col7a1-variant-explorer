@@ -1,4 +1,5 @@
 import { evidenceSummary, submitterCounts } from "./evidence.mjs";
+import { conditionDisplayLabel } from "./condition-labels.mjs";
 
 // Text order is alphabetical, never a ranking of clinical severity or evidence quality.
 export const TABLE_SORT_FIELDS = [
@@ -8,7 +9,7 @@ export const TABLE_SORT_FIELDS = [
   { key: "submitters", label: "Submitters", ascendingLabel: "Submitters: fewest first", descendingLabel: "Submitters: most first", description: "Highest reported source submitter count when source counts differ; counts are never added together. Missing counts stay last." },
   { key: "domain", label: "Domain", ascendingLabel: "Domain A–Z", descendingLabel: "Domain Z–A", description: "Alphabetical source region labels; variants without a mapped domain stay last." },
   { key: "position", label: "Position", ascendingLabel: "Protein position ↑", descendingLabel: "Protein position ↓", description: "First reported protein residue, numerically; unmapped variants stay last." },
-  { key: "conditions", label: "Conditions", ascendingLabel: "Conditions A–Z", descendingLabel: "Conditions Z–A", description: "Alphabetical conditions in source display order; missing conditions stay last." },
+  { key: "conditions", label: "Conditions", ascendingLabel: "Conditions A–Z", descendingLabel: "Conditions Z–A", description: "Alphabetical displayed condition names, preserving source entry order; missing conditions stay last." },
   { key: "id", label: "ClinVar", ascendingLabel: "Variation ID ↑", descendingLabel: "Variation ID ↓", description: "Numeric ClinVar Variation ID." },
 ];
 
@@ -28,7 +29,7 @@ function valueFor(variant, field) {
     case "submitters": return submitterCounts(variant).at(-1) ?? null;
     case "domain": return variant.proteinMapping?.status === "mapped" ? text(variant.proteinMapping.regionLabels) : null;
     case "position": return variant.proteinMapping?.status === "mapped" && Number.isSafeInteger(variant.proteinMapping.start) ? variant.proteinMapping.start : null;
-    case "conditions": return text(variant.conditions);
+    case "conditions": return text(variant.conditions?.map(conditionDisplayLabel));
     default: return variant.variationId;
   }
 }

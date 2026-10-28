@@ -25,6 +25,7 @@ import "./workspace.css";
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { SORT_OPTIONS, TABLE_SORT_FIELDS } from "./variant-sort.mjs";
 import { validateDataset } from "./dataset-validation.mjs";
+import { conditionDisplayLabel } from "./condition-labels.mjs";
 import { readExplorerState, writeExplorerState, EXPLORER_PAGE_SIZE as PAGE_SIZE, MAX_SEARCH_LENGTH } from "./explorer-state.mjs";
 
 const Arrow = () => <span aria-hidden="true">↗</span>;
@@ -490,9 +491,9 @@ function Explorer({ data }) {
                     <td>
                       <span
                         className="condition-text"
-                        title={v.conditions.join("; ")}
+                        title={v.conditions.map(conditionDisplayLabel).join("; ")}
                       >
-                        {v.conditions[0] || "Not reported"}
+                        {v.conditions[0] ? conditionDisplayLabel(v.conditions[0]) : "Not reported"}
                       </span>
                       {v.conditions.length > 1 && (
                         <button

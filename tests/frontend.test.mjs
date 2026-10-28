@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { UNCLASSIFIED } from "../src/chart-data.mjs";
+import { conditionDisplayLabel } from "../src/condition-labels.mjs";
 import { evidenceSummary, submittersLabel, MULTIPLE_SUBMITTERS_REVIEW } from "../src/evidence.mjs";
 import {
   EMPTY_FILTERS,
@@ -17,6 +18,33 @@ const data = JSON.parse(
 );
 const filter = (overrides) =>
   filterVariants(data.variants, { ...EMPTY_FILTERS, ...overrides });
+test("DEB display naming preserves qualified subtypes and semicolon-delimited source entries", () => {
+  assert.equal(conditionDisplayLabel("Epidermolysis bullosa dystrophica"), "Dystrophic epidermolysis bullosa (DEB)");
+  assert.equal(conditionDisplayLabel("Recessive dystrophic epidermolysis bullosa;Epidermolysis bullosa dystrophica"), "Recessive dystrophic epidermolysis bullosa;Dystrophic epidermolysis bullosa (DEB)");
+  for (const label of ["Epidermolysis bullosa dystrophica inversa, autosomal recessive", "Epidermolysis bullosa dystrophica localisata", "7 conditions", "not provided", "Other; Epidermolysis bullosa dystrophica, autosomal dominant"])
+    assert.equal(conditionDisplayLabel(label), label);
+});
+test("DEB common-name and shorthand search includes source synonyms and existing named subtypes", () => {
+  const expected = filter({ query: "dystrophic epidermolysis bullosa" }).map(v => v.variationId);
+  assert.ok(expected.includes(345787));
+  assert.ok(expected.includes(1177485));
+  for (const query of ["DEB", "dystrophic EB", "Dystrophic epidermolysis bullosa (DEB)"])
+    assert.deepEqual(filter({ query }).map(v => v.variationId), expected);
+  assert.ok(filter({ query: "Epidermolysis bullosa dystrophica" }).some(v => v.variationId === 345787));
+  const indexed = data.variants.map(v => ({ ...v, searchText: searchableText(v) }));
+  assert.deepEqual(filterVariants(indexed, { ...EMPTY_FILTERS, query: "DEB" }).map(v => v.variationId), expected);
+});
+test("condition sorting uses visible names while CSV retains original source wording", () => {
+  const template = data.variants.find(v => v.variationId === 345787);
+  const variants = ["Eczema", "Epidermolysis bullosa dystrophica", "Dermatitis"].map((label, i) => ({ ...template, variationId: i + 1, conditions: [label] }));
+  assert.deepEqual(sortVariants(variants, "conditions").map(v => v.variationId), [3, 2, 1]);
+  assert.deepEqual(sortVariants(variants, "conditions-desc").map(v => v.variationId), [1, 2, 3]);
+  assert.deepEqual(template.conditions, ["Epidermolysis bullosa dystrophica"]);
+  const csv = variantsCsv([template], data.protein.domains);
+  assert.ok(csv.includes('"Conditions (as reported)"'));
+  assert.ok(csv.includes('"Epidermolysis bullosa dystrophica"'));
+  assert.ok(!csv.includes("Dystrophic epidermolysis bullosa (DEB)"));
+});
 test("not-reported chart category filters missing classifications without including source no-classification labels", () => {
   const missing = filter({ significance: UNCLASSIFIED });
   assert.equal(missing.length, 38);

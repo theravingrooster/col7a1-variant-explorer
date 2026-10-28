@@ -1,5 +1,6 @@
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { submitterCounts } from "./evidence.mjs";
+import { conditionDisplayLabel, expandConditionQuery } from "./condition-labels.mjs";
 export { sortVariants } from "./variant-sort.mjs";
 
 export const GROUPS = {
@@ -57,6 +58,7 @@ export function searchableText(v) {
     ...(v.otherIds || []),
     ...v.geneSymbols,
     ...v.conditions,
+    ...v.conditions.map(conditionDisplayLabel),
     ...v.conditionIdentifiers,
     ...v.rcvAccessions,
     ...v.clinicalSignificance,
@@ -73,7 +75,7 @@ export function searchableText(v) {
 }
 
 function searchQuery(query) {
-  const terms = query
+  const terms = expandConditionQuery(query)
     .toLowerCase()
     // Preserve coordinates copied from the evidence panel as a single term.
     .replace(

@@ -85,6 +85,8 @@ Filters, sorting, page, and selected evidence are stored in the URL, so views ca
 
 Click any table column heading to sort ascending; click again to reverse. Review/submitters and domain/position have separate heading controls. Text uses natural alphabetical order, not clinical severity or evidence quality. Submitter sorting uses the highest reported source count without adding source counts together. Missing values stay last in either direction, with Variation ID as a stable tie-break. The entire filtered cohort is sorted before pagination, and the selected order persists in shared URLs.
 
+Condition names use a small, explicit display synonym: the complete source term “Epidermolysis bullosa dystrophica” appears as “Dystrophic epidermolysis bullosa (DEB),” including that term within semicolon-delimited entries. This synonym is documented by [NCBI MedGen C0079294](https://www.ncbi.nlm.nih.gov/medgen/37179). Qualified subtypes remain unchanged. Details show the original ClinVar label; source arrays, identifiers, entry counts, and CSV wording are preserved. Search accepts both names, and “DEB” or “dystrophic EB” expands to the full common name so explicitly named subtypes are included too. Conditions sort by the displayed names.
+
 CSV export includes **all filtered results**, across all pages, with quoted fields and spreadsheet formula protection. Source JSON and TSV downloads are available under “Source files & mapping methods.”
 
 Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (source audit), `src/app.jsx` (React UI), `src/data-utils.mjs` (filter/map/export logic), `src/styles.css` (responsive layout). Dependency versions and cached archive checksums used for this offline build are recorded in `scripts/local-dependencies.json`.
@@ -92,7 +94,7 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 111 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 114 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 

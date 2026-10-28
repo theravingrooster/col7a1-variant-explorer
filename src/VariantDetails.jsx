@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { formatNumber as num, humanReason, positionLabel } from "./data-utils.mjs";
 import ReviewSummary from "./ReviewSummary.jsx";
 import ShareViewButton from "./ShareViewButton.jsx";
+import { conditionDisplayLabel, DEB_SYNONYM_URL } from "./condition-labels.mjs";
 
 function ClinVarLink({ variant }) {
   return <a className="button primary" href={variant.url} target="_blank" rel="noreferrer">Open in ClinVar <span aria-hidden="true">↗</span></a>;
@@ -71,8 +72,12 @@ export default function VariantDetails({ variant: v, protein, data, viewUrl, onC
 
       {m.extent === "frameshift_anchor" && <p className="info-note">This maps the frameshift anchor only. It does not describe the downstream extent of the altered protein.</p>}
       <section className="detail-conditions" aria-labelledby="detail-conditions-title">
-        <h3 id="detail-conditions-title">Conditions, as reported</h3>
-        {v.conditions.length ? <ul className="conditions">{v.conditions.map(c => <li key={c}>{c}</li>)}</ul> : <p className="muted">No conditions reported.</p>}
+        <h3 id="detail-conditions-title">Conditions</h3>
+        {v.conditions.length ? <ul className="conditions">{v.conditions.map(c => {
+          const label = conditionDisplayLabel(c);
+          return <li key={c}>{label}{label !== c && <small className="condition-source-name">ClinVar label: {c}</small>}</li>;
+        })}</ul> : <p className="muted">No conditions reported.</p>}
+        {v.conditions.some(c => conditionDisplayLabel(c) !== c) && <p className="evidence-context">DEB is shown using its common name. <a href={DEB_SYNONYM_URL} target="_blank" rel="noreferrer">NCBI synonym reference ↗</a>. CSV and source downloads retain the original wording.</p>}
         <p className="evidence-context">Source summaries such as “7 conditions” are retained verbatim. These records are not a complete condition-level assertion file.</p>
       </section>
 

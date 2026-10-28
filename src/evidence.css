@@ -34,6 +34,7 @@
 .detail-conditions { padding:0 0 20px; }
 .research-detail .detail-conditions h3 { margin:20px 0 10px; }
 .research-detail .conditions { margin:0; }
+.condition-source-name { display:block; margin-top:3px; font-size:11px; line-height:1.5; color:var(--text-muted); }
 .detail-disclosure { border-top:1px solid var(--border-color, #dfe5dd); }
 .detail-disclosure > summary { min-height:54px; padding:16px 0; cursor:pointer; font-size:14px; font-weight:600; }
 .detail-disclosure > summary > span { float:right; font-size:11px; font-weight:400; color:var(--text-muted, #586b60); margin-left:12px; }
