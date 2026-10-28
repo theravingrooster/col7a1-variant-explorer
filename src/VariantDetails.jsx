@@ -3,12 +3,13 @@ import { formatNumber as num, humanReason, positionLabel } from "./data-utils.mj
 import ReviewSummary from "./ReviewSummary.jsx";
 import ShareViewButton from "./ShareViewButton.jsx";
 import { conditionDisplayLabel, DEB_SYNONYM_URL } from "./condition-labels.mjs";
+import { researchAnnotations, CONDITION_OPTIONS } from "./research-data.mjs";
 
 function ClinVarLink({ variant }) {
   return <a className="button primary" href={variant.url} target="_blank" rel="noreferrer">Open in ClinVar <span aria-hidden="true">↗</span></a>;
 }
 
-export default function VariantDetails({ variant: v, protein, data, viewUrl, onClose }) {
+export default function VariantDetails({ variant: v, protein, data, viewUrl, onClose, saved = false, onToggleSaved, saveNotice }) {
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -25,6 +26,7 @@ export default function VariantDetails({ variant: v, protein, data, viewUrl, onC
   const m = v.proteinMapping;
   const overlappingDomains = m.domainIds.map(id => protein.domains.find(d => d.id === id)).filter(Boolean);
   const snapshotDate = data?.snapshot?.preparedDate;
+  const research = researchAnnotations(v);
   return (
     <dialog ref={ref} className="detail-dialog research-detail" aria-labelledby="detail-title"
       onCancel={onClose}
@@ -46,8 +48,10 @@ export default function VariantDetails({ variant: v, protein, data, viewUrl, onC
         <div className="detail-source-links">
           <ClinVarLink variant={v} />
           <a className="button" href={protein.url} target="_blank" rel="noreferrer">UniProt Q02388 <span aria-hidden="true">↗</span></a>
+          {onToggleSaved && <button className="button" aria-pressed={saved} onClick={onToggleSaved}>{saved ? "Saved to shortlist" : "Save to shortlist"}</button>}
         </div>
       </div>
+      {saveNotice && <p className="evidence-context" role="status">{saveNotice}</p>}
 
       <section className="detail-hgvs" aria-labelledby="detail-hgvs-title">
         <h3 id="detail-hgvs-title">Full HGVS & source names</h3>
@@ -59,6 +63,16 @@ export default function VariantDetails({ variant: v, protein, data, viewUrl, onC
         <h3 id="evidence-quality-title">Review & submitters</h3>
         <ReviewSummary variant={v} full />
         <p className="evidence-context">Review status and submitter counts are ClinVar source aggregates. A larger count alone does not establish agreement or pathogenicity; counts are not summed across genome assemblies.</p>
+      </section>
+
+      <section className="detail-research" aria-labelledby="detail-research-title">
+        <h3 id="detail-research-title">Research context</h3>
+        <p><strong>Source condition labels:</strong> {research.conditionKeys.length ? CONDITION_OPTIONS.filter(option => option.value !== "both" && research.conditionKeys.includes(option.value)).map(option => option.label).join(" · ") : "No explicit recessive or dominant EB label in these source summaries."}</p>
+        {research.matchedConditions.length > 0 && <ul>{research.matchedConditions.map(label => <li key={label}>{label}</li>)}</ul>}
+        <p className="evidence-context">Condition labels are not an inheritance determination. ClinVar classification is an aggregate for the variant and is not tied here to a specific condition.</p>
+        <p><strong>HGVS patterns:</strong> {research.summary}</p>
+        {research.patternEvidence.length > 0 && <ul>{research.patternEvidence.map(item => <li key={`${item.key}-${item.source}`}><span>{item.label}</span> <code>{item.source}</code></li>)}</ul>}
+        <p className="evidence-context">Patterns describe reported HGVS only. They do not establish functional effect, severity, phase, or treatment eligibility.</p>
       </section>
 
       {viewUrl && <div className="detail-share"><ShareViewButton url={viewUrl} /></div>}

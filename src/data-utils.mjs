@@ -1,6 +1,7 @@
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { submitterCounts } from "./evidence.mjs";
 import { conditionDisplayLabel, expandConditionQuery } from "./condition-labels.mjs";
+import { researchAnnotations } from "./research-data.mjs";
 export { sortVariants } from "./variant-sort.mjs";
 
 export const GROUPS = {
@@ -33,6 +34,8 @@ export const EMPTY_FILTERS = {
   domain: "",
   mapping: "",
   type: "",
+  condition: "",
+  pattern: "",
   range: null,
 };
 export const formatNumber = (n) => new Intl.NumberFormat("en-US").format(n);
@@ -143,6 +146,7 @@ export function filterVariants(variants, filters) {
   const query = searchQuery(filters.query);
   return variants.filter((v) => {
     const m = v.proteinMapping;
+    const research = filters.condition || filters.pattern ? (v.research ?? researchAnnotations(v)) : null;
     return (
       query.terms.every((t) => (v.searchText ?? searchableText(v)).includes(t)) &&
       query.identifiers.every(({ kind, value }) =>
@@ -157,6 +161,8 @@ export function filterVariants(variants, filters) {
       (!filters.domain || m.domainIds.includes(filters.domain)) &&
       (!filters.mapping || m.status === filters.mapping) &&
       (!filters.type || v.types.includes(filters.type)) &&
+      (!filters.condition || research.conditionKeys.includes(filters.condition)) &&
+      (!filters.pattern || research.patterns.includes(filters.pattern)) &&
       (!filters.range ||
         (m.status === "mapped" &&
           m.start <= filters.range[1] &&
@@ -220,8 +226,14 @@ export function variantsCsv(variants, domains, context = {}) {
     "Protein reference",
     "Protein reference URL",
     "Protein mapping provenance",
+    "Condition context (explicit source labels)",
+    "Matched condition labels (as reported)",
+    "HGVS patterns (derived, not functional evidence)",
+    "HGVS pattern source expressions",
   ];
-  const rows = variants.map((v) => [
+  const rows = variants.map((v) => {
+    const research = v.research ?? researchAnnotations(v);
+    return [
     v.variationId,
     v.alleleIds.join("; "),
     v.geneSymbols.join("; "),
@@ -256,7 +268,12 @@ export function variantsCsv(variants, domains, context = {}) {
     v.proteinMapping.status === "mapped" ? (context.protein?.accession || "Q02388") : "",
     context.protein?.url || "",
     context.processing?.mapping || "",
-  ]);
+    research.conditionKeys.join("; "),
+    research.matchedConditions.join("; "),
+    research.patterns.join("; "),
+    research.patternEvidence.map(e => `${e.label}: ${e.source}`).join("; "),
+  ];
+  });
   return (
     "\uFEFF" +
     [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n") +

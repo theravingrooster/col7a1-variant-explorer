@@ -19,6 +19,9 @@ import { updateFilter, toggleDomainClassification } from "./filter-actions.mjs";
 import VisualSummary from "./VisualSummary.jsx";
 import ProteinMap from "./ProteinMap.jsx";
 import VariantDetails from "./VariantDetails.jsx";
+import VariantShortlist from "./VariantShortlist.jsx";
+import { CONDITION_OPTIONS, HGVS_PATTERN_OPTIONS, researchAnnotations } from "./research-data.mjs";
+import { readSavedShortlist, writeSavedShortlist, toggleShortlistId, MAX_SHORTLIST } from "./shortlist-state.mjs";
 import ReviewSummary from "./ReviewSummary.jsx";
 import { MULTIPLE_SUBMITTERS_REVIEW } from "./evidence.mjs";
 import "./workspace.css";
@@ -111,6 +114,13 @@ function Sources({ data }) {
           ))}
         </div>
         <p>{data.processing.mapping}</p>
+        <div className="research-methods" id="research-filter-methods">
+          <h3>RDEB research filters</h3>
+          <p>Condition context matches explicit recessive or dominant EB terms in the existing ClinVar condition summaries. Both labels may occur for one record. Generic DEB and summaries such as “7 conditions” do not establish inheritance, so an explicit-label cohort is incomplete. Classifications remain variant-level aggregates, not condition-specific assertions.</p>
+          <p>Molecular-change filters recognize conservative patterns in the reported coding and protein HGVS. A glycine substitution is also a missense change; a protein insertion can also introduce a stop. The splice-site filter covers single-nucleotide substitutions at intronic +1/+2/−1/−2 only, not complex splice-adjacent changes. Unrecognized expressions remain in the unresolved group. No functional effect or loss of function is inferred.</p>
+          <p>These filters are motivated by the variant classes discussed in <ExternalLink href="https://www.ncbi.nlm.nih.gov/books/NBK1304/">GeneReviews: Dystrophic Epidermolysis Bullosa</ExternalLink>. The shortlist compares existing records; it does not establish phase, a biallelic genotype, severity, or treatment eligibility.</p>
+          <p>Only up to {MAX_SHORTLIST} numeric ClinVar IDs are saved in this browser and included in share links. Filter reset keeps the shortlist. CSV exports retain the original source fields and include derived labels with their supporting HGVS expressions.</p>
+        </div>
         <ul>
           {data.processing.limitations.map((note) => (
             <li key={note}>{note}</li>
@@ -139,10 +149,27 @@ function Explorer({ data }) {
   const [sort, setSort] = useState(initial.sort);
   const [page, setPage] = useState(initial.page);
   const [selected, setSelected] = useState(() => data.variants.find(v => v.variationId === initial.selectedId) || null);
+  const [showShortlist, setShowShortlist] = useState(initial.comparisonOpen);
+  const [sharedShortlistIds, setSharedShortlistIds] = useState(() => new URLSearchParams(location.search).has("shortlist") ? initial.shortlistIds : null);
+  const [savedState, setSavedState] = useState(() => {
+    try { return readSavedShortlist(window.localStorage, data.variants); }
+    catch { return { ids: [], notice: "Browser storage is unavailable. Your shortlist works for this visit; copy a share link to keep it." }; }
+  });
+  const savedIds = savedState.ids;
   const variants = useMemo(
-    () => data.variants.map((v) => ({ ...v, searchText: searchableText(v) })),
+    () => data.variants.map((v) => ({ ...v, searchText: searchableText(v), research: researchAnnotations(v) })),
     [data],
   );
+  const variantsById = useMemo(() => new Map(variants.map(v => [v.variationId, v])), [variants]);
+  const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
+  const savedVariants = useMemo(() => savedIds.map(id => variantsById.get(id)).filter(Boolean), [savedIds, variantsById]);
+  const sharedVariants = useMemo(() => sharedShortlistIds?.map(id => variantsById.get(id)).filter(Boolean), [sharedShortlistIds, variantsById]);
+  useEffect(() => {
+    let notice;
+    try { notice = writeSavedShortlist(window.localStorage, savedIds); }
+    catch { notice = "Browser storage is unavailable. Your shortlist works for this visit; copy a share link to keep it."; }
+    if (notice) setSavedState(state => state.notice === notice ? state : { ...state, notice });
+  }, [savedIds]);
   const results = useMemo(
     () => sortVariants(filterVariants(variants, filters), sort),
     [variants, filters, sort],
@@ -154,9 +181,9 @@ function Explorer({ data }) {
   }, [results, shownPage]);
   useEffect(() => {
     const url = new URL(location.href);
-    url.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId }).toString();
+    url.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId, shortlistIds: sharedShortlistIds, comparisonOpen: showShortlist }).toString();
     if (url.href !== location.href) history.replaceState(null, "", url);
-  }, [filters, sort, shownPage, selected]);
+  }, [filters, sort, shownPage, selected, sharedShortlistIds, showShortlist]);
   useEffect(() => {
     const restore = () => {
       const state = readExplorerState(location.search, data);
@@ -164,6 +191,8 @@ function Explorer({ data }) {
       setSort(state.sort);
       setPage(state.page);
       setSelected(data.variants.find(v => v.variationId === state.selectedId) || null);
+      setSharedShortlistIds(new URLSearchParams(location.search).has("shortlist") ? state.shortlistIds : null);
+      setShowShortlist(state.comparisonOpen);
     };
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
@@ -194,6 +223,20 @@ function Explorer({ data }) {
     setFilters({ ...EMPTY_FILTERS });
     setPage(0);
   }
+  function toggleSaved(id) {
+    setSharedShortlistIds(null);
+    setSavedState(state => toggleShortlistId(state.ids, id, data.variants));
+  }
+  function openShortlist() {
+    setSelected(null);
+    setShowShortlist(true);
+  }
+  function shortlistUrl(ids) {
+    const url = new URL(location.href);
+    url.search = writeExplorerState({ shortlistIds: ids, comparisonOpen: true }).toString();
+    url.hash = "";
+    return url.href;
+  }
   function changePage(next) {
     setPage(next);
     document.getElementById("variants-title")?.focus({ preventScroll: true });
@@ -215,20 +258,20 @@ function Explorer({ data }) {
       </nav>
     );
   }
-  function exportCsv() {
+  function exportCsv(exportedVariants = results, filename = "col7a1-filtered-variants.csv") {
     const url = URL.createObjectURL(
-      new Blob([variantsCsv(results, data.protein.domains, data)], {
+      new Blob([variantsCsv(exportedVariants, data.protein.domains, data)], {
         type: "text/csv;charset=utf-8;",
       }),
     );
     const a = document.createElement("a");
     a.href = url;
-    a.download = "col7a1-filtered-variants.csv";
+    a.download = filename;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const viewUrl = new URL(location.href);
-  viewUrl.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId }).toString();
+  viewUrl.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId, shortlistIds: sharedShortlistIds }).toString();
   viewUrl.hash = "";
   function openRow(event, variant) {
     if (event.target.closest("a, button, input, select, textarea, summary")) return;
@@ -280,6 +323,7 @@ function Explorer({ data }) {
               <p className="toolbar-mapping">Mapping: explicit protein HGVS → Q02388-1, residue checked · 1-based inclusive. <a href="#data-sources" onClick={() => { document.getElementById("source-methods").open = true; }}>Methods</a></p>
             </div>
             <div className="toolbar-actions">
+              <button className="button" onClick={openShortlist} title={`Keep up to ${MAX_SHORTLIST} variants across filters; compare up to four`} aria-label={`Open research shortlist, ${(sharedShortlistIds ?? savedIds).length} variants`}>{sharedShortlistIds ? "Shared shortlist" : "Shortlist"} <span className="mono">{(sharedShortlistIds ?? savedIds).length}</span></button>
               <ShareViewButton url={viewUrl.href} />
               <button className="button reset-all" onClick={clear}>Reset all filters</button>
             </div>
@@ -290,6 +334,7 @@ function Explorer({ data }) {
               {Object.entries(GROUPS).map(([key, group]) => <span key={key} title={group.label}><i style={{ background: `var(--significance-${key})` }} />{key === "pathogenic" ? "Pathogenic / likely" : key === "uncertain" ? "VUS" : key === "benign" ? "Benign / likely" : group.short}</span>)}
             </div>
           </div>
+          {savedState.notice && <p className="shortlist-status" role="status">{savedState.notice}</p>}
         </section>
           <section className="panel workspace-controls" aria-labelledby="filters-title">
             <h2 id="filters-title" className="sr-only">Filter the research workspace</h2>
@@ -361,6 +406,13 @@ function Explorer({ data }) {
               />
             </div>
             </div>
+            <div className="research-focus" aria-label="RDEB research filters">
+              <Select label="Condition context" value={filters.condition} onChange={v => setFilter("condition", v)} options={CONDITION_OPTIONS} all="All source conditions" />
+              <Select label="Molecular change (HGVS pattern)" value={filters.pattern} onChange={v => setFilter("pattern", v)} options={HGVS_PATTERN_OPTIONS} all="All HGVS patterns" />
+              <p className="research-focus-note">Source labels and reported HGVS. Supports mapped and unmapped variants; protein-position filters still apply. <a href="#research-filter-methods" onClick={() => { document.getElementById("source-methods").open = true; }}>How these filters work</a></p>
+              {filters.condition && <p className="research-focus-note">Matches explicit condition labels. Generic DEB and incomplete summaries may be missed; clinical significance remains the variant-level ClinVar aggregate.</p>}
+              {filters.pattern === "splice-site" && <p className="research-focus-note">Splice-site ±1/2 SNVs often have no protein position. Clear mapped-only, domain, or residue-range filters to include unmapped records. This pattern does not establish a functional splice effect. {(filters.mapping === "mapped" || filters.domain || filters.range) && <button className="text-button" onClick={() => { setFilters(f => ({ ...f, mapping: "", domain: "", range: null })); setPage(0); }}>Clear protein-position filters</button>}</p>}
+            </div>
             <div className="active-workspace-filters" aria-label="Active filters">
               {filters.query && <button onClick={() => setFilter("query", "")}>Search: {filters.query} ×</button>}
               {filters.significance && <button onClick={() => setFilter("significance", "")}>{filters.significance === UNCLASSIFIED ? "Not reported" : filters.significance} ×</button>}
@@ -368,6 +420,8 @@ function Explorer({ data }) {
               {filters.review && <button onClick={() => setFilter("review", "")}>Review: {filters.review} ×</button>}
               {filters.mapping && <button onClick={() => setFilter("mapping", "")}>{filters.mapping === "mapped" ? "Mapped" : "Unmapped"} ×</button>}
               {filters.type && <button onClick={() => setFilter("type", "")}>{filters.type} ×</button>}
+              {filters.condition && <button onClick={() => setFilter("condition", "")}>{CONDITION_OPTIONS.find(option => option.value === filters.condition)?.label} ×</button>}
+              {filters.pattern && <button onClick={() => setFilter("pattern", "")}>{HGVS_PATTERN_OPTIONS.find(option => option.value === filters.pattern)?.label} ×</button>}
               {filters.range && <button onClick={() => setFilter("range", null)}>aa {filters.range.join("–")} ×</button>}
             </div>
           </section>
@@ -395,7 +449,7 @@ function Explorer({ data }) {
             <button
               className="button"
               title={`Export all ${num(results.length)} matching variants across every page`}
-              onClick={exportCsv}
+              onClick={() => exportCsv()}
               disabled={!results.length}
             >
               Export CSV <span aria-hidden="true">↓</span>
@@ -466,6 +520,7 @@ function Explorer({ data }) {
                       <span className="cell-tertiary">
                         {v.types.join(" / ")}
                       </span>
+                      {v.research.patterns.some(pattern => pattern !== "unresolved") && <span className="research-pattern-label">{v.research.summary}</span>}
                     </td>
                     <td>
                       <Badge variant={v} />
@@ -514,6 +569,9 @@ function Explorer({ data }) {
                       >
                         View evidence
                       </button>
+                      <button className="text-button save-variant" aria-pressed={savedSet.has(v.variationId)}
+                        aria-label={`${savedSet.has(v.variationId) ? "Remove" : "Save"} variant ${v.variationId} ${savedSet.has(v.variationId) ? "from" : "to"} shortlist`}
+                        onClick={() => toggleSaved(v.variationId)}>{savedSet.has(v.variationId) ? "✓ Saved" : "+ Save"}</button>
                     </td>
                   </tr>
                 ))}
@@ -549,9 +607,17 @@ function Explorer({ data }) {
           protein={data.protein}
           data={data}
           viewUrl={viewUrl.href}
+          saved={savedSet.has(selected.variationId)}
+          onToggleSaved={() => toggleSaved(selected.variationId)}
+          saveNotice={savedState.notice}
           onClose={() => setSelected(null)}
         />
       )}
+      {showShortlist && <VariantShortlist key={sharedShortlistIds ? "shared" : "saved"} variants={sharedVariants ?? savedVariants} protein={data.protein} data={data}
+        shared={sharedShortlistIds !== null} onOpenSaved={() => setSharedShortlistIds(null)}
+        storageNotice={savedState.notice} onClose={() => setShowShortlist(false)} onRemove={id => sharedShortlistIds !== null ? setSharedShortlistIds(ids => ids.filter(value => value !== id)) : toggleSaved(id)}
+        onOpenVariant={variant => { setShowShortlist(false); setSelected(variant); }}
+        onExport={(items, kind) => exportCsv(items, kind === "comparison" ? "col7a1-comparison-variants.csv" : "col7a1-shortlist-variants.csv")} shareUrlFor={shortlistUrl} />}
     </>
   );
 }

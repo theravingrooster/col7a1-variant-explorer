@@ -94,7 +94,7 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 114 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 135 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
@@ -150,3 +150,18 @@ The model starts stationary. Optional automatic rotation pauses during interacti
 A sticky research bar keeps the snapshot/mapping context, color legend, result count, **Reset all filters**, and **Copy view link** available while scrolling. The exact classification color key is expandable in the domain-comparison tab. Duplicate statistics and competing full-size summary panels have been removed. Copying a view includes any open variant evidence; a selectable link appears if clipboard access is unavailable.
 
 Click a noninteractive area of a table row, or press Enter/Space on its focusable row, to open evidence. Nested ClinVar links and text selection retain their normal behavior. Details surface the verbatim accession-qualified source names, all supplied conditions, exact overlapping feature boundaries and direct ClinVar/UniProt links. No source files or datasets were changed for this round.
+
+
+## RDEB research workflow
+
+The research controls add **Condition context** and **Molecular change (HGVS pattern)**. These compose with every existing search, evidence, domain, range and mapping filter; the same complete cohort feeds the table, map, summary graphs and CSV. Active research facets are included in shared URLs and reset with other filters.
+
+Condition context uses exact semicolon-delimited source terms listed in `src/research-data.mjs`: explicit recessive EB labels (786 records), dominant labels (89), or both (31). Generic DEB is not promoted to RDEB. ClinVar condition summaries and classifications are independent aggregates; this is an incomplete source-label cohort, not a condition-specific interpretation or inheritance prediction.
+
+HGVS patterns cover reported frameshifts, introduced stops, missense changes, glycine substitutions, unchanged protein descriptions, protein indels/duplications, and intronic ±1/2 single-nucleotide substitutions. Patterns can overlap: glycine substitution is a missense pattern, and a protein insertion can introduce a stop. Other notation remains unresolved. A reported pattern does not establish RNA/protein effect, loss of function, phase, severity or treatment eligibility. All 261 splice-site SNVs in this snapshot are unmapped; the interface offers a way to clear conflicting protein-position filters. Source expressions remain visible in evidence and exports.
+
+Use **Save** in a row or evidence panel to retain up to 24 numeric ClinVar IDs in this browser (`col7a1-shortlist-v1`). The sticky **Shortlist** control opens a bounded dialog, where 2–4 variants can be compared across full HGVS, classifications, reviews, source submitter counts, domains, conditions and evaluation dates. Saved records are independent of filters; **Reset all filters** preserves them. Storage failures fall back to an in-session list with a visible notice.
+
+**Copy shortlist link** and **Copy comparison link** encode validated IDs in the URL. Shared lists are transient and never overwrite the recipient's browser list; **Open my saved shortlist** returns to it. Shortlist/comparison CSV exports use their selected IDs independently of table filters. All CSV exports retain original source columns and add explicit condition matches, derived HGVS-pattern keys and their supporting source expressions. No additional data files, runtime data services, dependencies or patient data were added.
+
+Research interpretation context: [GeneReviews — Dystrophic Epidermolysis Bullosa](https://www.ncbi.nlm.nih.gov/books/NBK1304/). This is a documentation reference, not a new variant data source.

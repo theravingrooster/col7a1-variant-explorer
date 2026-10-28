@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-export default function ShareViewButton({ url }) {
+export default function ShareViewButton({ url, label = "Copy view link" }) {
   const [status, setStatus] = useState("");
   const [fallback, setFallback] = useState(false);
   const input = useRef(null);
@@ -21,7 +21,7 @@ export default function ShareViewButton({ url }) {
     }
   }
   return <div className="share-view-control">
-    <button className="button" onClick={copy}>Copy view link</button>
+    <button className="button" onClick={copy}>{label}</button>
     <span className="share-status" role="status">{status}</span>
     {fallback && <label className="share-fallback">View link<input ref={input} type="text" readOnly value={url} /></label>}
   </div>;

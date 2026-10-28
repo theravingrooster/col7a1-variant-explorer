@@ -13,7 +13,7 @@ import {
 const data = JSON.parse(
   await readFile(new URL("../public/data/variants.json", import.meta.url)),
 );
-const defaults = () => ({ filters: { ...EMPTY_FILTERS }, sort: "id", page: 0, selectedId: null });
+const defaults = () => ({ filters: { ...EMPTY_FILTERS }, sort: "id", page: 0, selectedId: null, shortlistIds: [], comparisonOpen: false });
 const read = (search) => readExplorerState(search, data);
 
 test("missing-classification chart selection survives a shared URL", () => {
@@ -33,6 +33,7 @@ test("a complete filtered variant permalink survives an exact round trip", () =>
   const variant = data.variants.find((v) => v.variationId === 17423);
   const state = {
     filters: {
+      ...EMPTY_FILTERS,
       query: "c.8393T>A",
       significance: variant.clinicalSignificance[0],
       review: variant.reviewStatus[0],
@@ -44,6 +45,8 @@ test("a complete filtered variant permalink survives an exact round trip", () =>
     sort: "position",
     page: 0,
     selectedId: 17423,
+    shortlistIds: [],
+    comparisonOpen: false,
   };
   const params = writeExplorerState(state);
   assert.ok(params instanceof URLSearchParams);

@@ -1,10 +1,12 @@
 import { EMPTY_FILTERS, filterVariants } from "./data-utils.mjs";
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { SORT_KEYS } from "./variant-sort.mjs";
+import { CONDITION_OPTIONS, HGVS_PATTERN_OPTIONS } from "./research-data.mjs";
+import { parseShortlistParam, serializeShortlistIds } from "./shortlist-state.mjs";
 
 export const EXPLORER_PAGE_SIZE = 50;
 export const MAX_SEARCH_LENGTH = 500;
-const FILTER_KEYS = ["significance", "review", "domain", "mapping", "type"];
+const FILTER_KEYS = ["significance", "review", "domain", "mapping", "type", "condition", "pattern"];
 
 function positiveInteger(value) {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
@@ -38,6 +40,8 @@ export function readExplorerState(search, data) {
     domain: new Set(data.protein.domains.map((d) => d.id)),
     mapping: new Set(["mapped", "unmapped"]),
     type: new Set(data.variants.flatMap((v) => v.types)),
+    condition: new Set(CONDITION_OPTIONS.map(option => option.value)),
+    pattern: new Set(HGVS_PATTERN_OPTIONS.map(option => option.value)),
   };
   for (const key of FILTER_KEYS) {
     const value = one(key);
@@ -59,7 +63,9 @@ export function readExplorerState(search, data) {
   const selectedId = data.variants.some((v) => v.variationId === variant)
     ? variant
     : null;
-  return { filters, sort, page, selectedId };
+  const shortlistIds = parseShortlistParam(one("shortlist"), data.variants);
+  const comparisonOpen = one("compare") === "1" && shortlistIds.length >= 2 && selectedId === null;
+  return { filters, sort, page, selectedId, shortlistIds, comparisonOpen };
 }
 
 /** Serialize known state only; default values produce a clean, empty query. */
@@ -74,6 +80,8 @@ export function writeExplorerState(state = {}) {
     const value = filters[key];
     if (
       typeof value === "string" && value && value.length <= 500 &&
+      (key !== "condition" || CONDITION_OPTIONS.some(option => option.value === value)) &&
+      (key !== "pattern" || HGVS_PATTERN_OPTIONS.some(option => option.value === value)) &&
       (key !== "mapping" || value === "mapped" || value === "unmapped")
     ) params.set(key, value);
   }
@@ -83,5 +91,8 @@ export function writeExplorerState(state = {}) {
     params.set("page", String(state.page + 1));
   if (Number.isSafeInteger(state?.selectedId) && state.selectedId > 0)
     params.set("variant", String(state.selectedId));
+  const shortlist = serializeShortlistIds(state?.shortlistIds);
+  if (shortlist) params.set("shortlist", shortlist);
+  if (state?.comparisonOpen && shortlist.split(",").filter(Boolean).length >= 2 && !params.has("variant")) params.set("compare", "1");
   return params;
 }

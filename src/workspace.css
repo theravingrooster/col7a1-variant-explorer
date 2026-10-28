@@ -11,6 +11,21 @@
 .toolbar-mapping a { text-decoration:underline; text-underline-offset:2px; }
 .toolbar-actions { display:flex; align-items:flex-start; gap:8px; flex-shrink:0; }
 .toolbar-actions .button { min-height:40px; }
+.toolbar-actions { flex-wrap:wrap; justify-content:flex-end; }
+.shortlist-status { margin:8px 0 0; font-size:11px; color:var(--text-muted); }
+.research-focus { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px 16px; padding-top:12px; border-top:1px solid var(--border-color); }
+.research-focus .select-label select { width:100%; }
+.research-focus-note { grid-column:1/-1; margin:0; font-size:11px; line-height:1.6; color:var(--text-muted); }
+.research-focus-note a { text-decoration:underline; text-underline-offset:2px; }
+.research-focus-note .text-button { margin-left:8px; font-size:11px; text-decoration:underline; min-height:30px; }
+.research-pattern-label { display:block; margin-top:4px; color:var(--text-muted); font-size:10px; line-height:1.5; }
+.save-variant { display:block; margin-top:5px; font-size:11px; min-height:30px; }
+.save-variant[aria-pressed="true"] { font-weight:650; }
+.detail-research { padding:8px 0 16px; border-top:1px solid var(--border-color); font-size:12px; line-height:1.6; }
+.detail-research h3 { font-size:14px; margin:12px 0; }
+.detail-research ul { padding-left:18px; overflow-wrap:anywhere; }
+.detail-research code { font-size:11px; }
+.research-methods { margin:16px 0; scroll-margin-top:170px; }
 .reset-all { border-color:var(--green); font-weight:650; }
 .research-toolbar-context { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:10px; padding-top:8px; border-top:1px solid var(--border-color); }
 .toolbar-count { font-size:12px; color:var(--text-muted); }
@@ -75,6 +90,7 @@
   .quick-filters .evidence-preset { width:100%; }
 }
 @media (max-width: 650px) {
+  .research-focus { grid-template-columns:minmax(0,1fr); }
   .research-workspace { padding-top: 18px; }
   .workspace-controls { padding:12px; gap:9px; }
   .evidence-preset { padding:8px; font-size:10px; line-height:1.4; }
