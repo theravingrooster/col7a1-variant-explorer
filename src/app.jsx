@@ -36,7 +36,7 @@ function Select({ label, value, onChange, options, all = "All" }) {
   return (
     <label className="select-label">
       <span>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">{all}</option>
         {options.map((o) => (
           <option key={o.value ?? o} value={o.value ?? o}>

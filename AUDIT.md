@@ -27,6 +27,8 @@ Scope: deployed COL7A1 explorer, React UI, search/filter/export logic, protein/s
 - Production build passes; committed processed JSON, TSV and UniProt source are unchanged and copied byte-for-byte to the build.
 - Runtime dependency audit reports zero known vulnerabilities at review time (`npm audit --omit=dev`).
 - Baseline live browser review exercised search, combined filters, histogram filtering, reset/empty state, sorting/pagination, evidence dialogs, CSV and source downloads. No application console errors were observed.
+- Hosted review build manually verified: genomic interval search (two overlapping records at GRCh38 chr3:48566281), exact variant search, evidence dialog and focus restoration, variant/filter/sort/page persistence through reload, one chart tab stop with arrow-key selection, 25 Pathogenic+NC2 records, empty-state recovery and disabled export, and methods disclosure navigation. No application console errors observed (browser-extension errors excluded).
+- Hosted interaction exposed ambiguous native select-label matching; each filter now has an explicit accessible name matching its visible label.
 - Eleven repeatable browser regression cases were added, including mobile widths and failure recovery. They were **not executed successfully in this workspace**: the local browser process was blocked by the execution environment’s socket restriction. A syntax check is not an end-to-end test result.
 
 ## Limits and future work
