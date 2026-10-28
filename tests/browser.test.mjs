@@ -16,11 +16,15 @@ const multipleSubmittersReview = "criteria provided, multiple submitters, no con
 const filterControl = label => page.getByRole("combobox", { name: label, exact: true, includeHidden: true });
 const resetAll = () => page.getByRole("button", { name: "Reset all filters", exact: true });
 async function openFilters() {
-  const details = page.locator("details").filter({
-    has: filterControl("Clinical significance"),
-  });
-  if (await details.count() && await details.getAttribute("open") === null)
-    await details.locator("summary").click();
+  const toggle = page.getByRole("button", { name: /^More filters/ });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+}
+async function openRangeControls() {
+  const toggle = page.getByRole("button", { name: "Set residue range", exact: true });
+  if (await toggle.getAttribute("aria-expanded") !== "true") await toggle.click();
+}
+async function openDomainChart() {
+  await page.getByRole("tab", { name: "Domain comparison", exact: true }).click();
 }
 async function selectFilter(label, value) {
   await openFilters();
@@ -72,7 +76,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); });
 beforeEach(async () => {
-  context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true, colorScheme: "light" });
+  context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true, colorScheme: "light", reducedMotion: "no-preference" });
   page = await context.newPage();
   errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -145,7 +149,8 @@ test("clinical summary shows exact source counts and toggles the table classific
   assert.equal(await pathogenic.getAttribute("aria-pressed"), "false");
 });
 
-test("a grouped domain/classification bar applies both filters and clears the selected pair", async () => {
+test("a stacked domain/classification segment applies both filters and clears the selected pair", async () => {
+  await openDomainChart();
   const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
   const expected = source.variants.filter(v => v.clinicalSignificance.includes("Pathogenic") && v.proteinMapping.domainIds.includes(nc2));
   assert.equal(expected.length, 25);
@@ -168,24 +173,56 @@ test("summary charts count all filtered pages and show truthful zero-result coun
   await selectFilter("Clinical significance", "Pathogenic");
   await expectCount(674);
   assert.equal(await tableRows().count(), 50);
-  assert.match(await page.locator(".summary-heading").innerText(), /674 variants across all pages/);
+  assert.match(await page.locator(".summary-heading").innerText(), /674 matching variants/);
   const summary = page.locator(".summary-panel");
   const beforePageChange = await summary.locator(".chart-count, .domain-bar-value").allTextContents();
   await page.getByRole("button", { name: "Next page", exact: true }).first().click();
   await page.waitForFunction(() => document.querySelector(".pagination")?.textContent.includes("Page 2 of"));
   assert.deepEqual(await summary.locator(".chart-count, .domain-bar-value").allTextContents(), beforePageChange);
-  assert.match(await page.locator(".summary-heading").innerText(), /674 variants across all pages/);
+  assert.match(await page.locator(".summary-heading").innerText(), /674 matching variants/);
   await query("this-variant-does-not-exist", 0);
   const empty = summary.getByRole("status");
   await empty.waitFor();
-  assert.match(await empty.innerText(), /No variants match the current filters/);
+  assert.match(await empty.innerText(), /No variants match these filters/);
   const zeroCounts = await summary.locator(".chart-count, .domain-bar-value").allTextContents();
   assert.ok(zeroCounts.length > 0);
   assert.ok(zeroCounts.every(value => Number(value.replaceAll(",", "")) === 0));
-  assert.match(await page.locator(".summary-heading").innerText(), /0 variants across all pages/);
+  assert.match(await page.locator(".summary-heading").innerText(), /0 matching variants/);
   await resetAll().click();
   await expectCount(source.summary.variants);
   assert.equal(await summary.getByRole("status").count(), 0);
+});
+
+test("summary tabs show one chart at a time and preserve cohort filters during keyboard navigation", async () => {
+  const clinical = page.getByRole("tab", { name: "Clinical significance", exact: true });
+  const domains = page.getByRole("tab", { name: "Domain comparison", exact: true });
+  const clinicalPanel = page.getByRole("tabpanel", { name: "Clinical significance", exact: true });
+  const domainPanel = page.getByRole("tabpanel", { name: "Domain comparison", exact: true });
+  assert.equal(await clinical.getAttribute("aria-selected"), "true");
+  assert.equal(await clinicalPanel.isVisible(), true);
+  assert.equal(await page.locator("#summary-domain-panel").isVisible(), false);
+  await page.getByRole("button", { name: "Filter Pathogenic: 674 variants in current results", exact: true }).click();
+  await expectCount(674);
+  const cohortURL = page.url();
+  await clinical.focus();
+  await clinical.press("ArrowRight");
+  assert.equal(await domains.evaluate(el => el === document.activeElement), true);
+  assert.equal(await domains.getAttribute("aria-selected"), "true");
+  assert.equal(await domainPanel.isVisible(), true);
+  assert.equal(await page.locator("#summary-clinical-panel").isVisible(), false);
+  const nc2 = source.protein.domains.find(d => d.label === "NC2");
+  const expected = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2.id) && v.clinicalSignificance.includes("Pathogenic"));
+  assert.equal(await domainPanel.getByRole("button", { name: `Filter NC2 domain: ${expected.length} variants in current results`, exact: true }).isVisible(), true);
+  assert.equal(page.url(), cohortURL);
+  await domains.press("Home");
+  assert.equal(await clinical.evaluate(el => el === document.activeElement), true);
+  assert.equal(await clinicalPanel.isVisible(), true);
+  assert.equal(await filterControl("Clinical significance").inputValue(), "Pathogenic");
+  await clinical.press("End");
+  assert.equal(await domains.getAttribute("aria-selected"), "true");
+  await domains.press("ArrowRight");
+  assert.equal(await clinical.getAttribute("aria-selected"), "true");
+  await expectCount(674);
 });
 
 test("Not reported is filterable and its missing-classification state survives reload", async () => {
@@ -257,10 +294,13 @@ test("protein map leads the charts and table, with domain and keyboard range sel
     };
   });
   assert.deepEqual(order, { mapBeforeSummary: true, summaryBeforeTable: true });
-  assert.ok((await page.locator(".protein-map").boundingBox()).height >= 350, "The desktop map is the main visual workspace");
+  const mapBounds = await page.locator(".protein-map").boundingBox();
+  assert.ok(mapBounds.height > 120 && mapBounds.height < 400, "The default residue map stays compact and readable");
+  assert.equal(await page.getByRole("region", { name: "Collagen VII schematic", exact: true }).isVisible(), true);
   const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
   const expected = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2));
-  const domain = page.locator(".map-region-guide").getByRole("button", { name: /^NC2/ });
+  const nc2Region = source.protein.domains.find(d => d.id === nc2);
+  const domain = page.getByRole("button", { name: `Filter NC2, amino acids ${nc2Region.start} to ${nc2Region.end}`, exact: true });
   await domain.click();
   await expectCount(expected.length);
   assert.equal(await domain.getAttribute("aria-pressed"), "true");
@@ -316,6 +356,7 @@ test("a variant marker exposes hover and keyboard evidence and opens the full re
 });
 
 test("custom residue ranges validate, filter inclusively and retain unmapped records on demand", async () => {
+  await openRangeControls();
   const start = page.getByLabel("Range start (amino acid)", { exact: true });
   const end = page.getByLabel("Range end (amino acid)", { exact: true });
   await start.fill("2800");
@@ -328,7 +369,7 @@ test("custom residue ranges validate, filter inclusively and retain unmapped rec
   await page.getByRole("button", { name: "Apply residue range", exact: true }).click();
   const expected = source.variants.filter(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start <= 2798 && v.proteinMapping.end >= 2798);
   await expectCount(expected.length);
-  assert.match(await page.locator(".summary-heading").innerText(), new RegExp(`${expected.length} variants across all pages`));
+  assert.match(await page.locator(".summary-heading").innerText(), new RegExp(`${expected.length} matching variants`));
   await page.getByRole("button", { name: "Show unmapped variants", exact: true }).click();
   await expectCount(source.summary.unmapped);
   assert.equal(await filterControl("Protein mapping").inputValue(), "unmapped");
@@ -339,10 +380,12 @@ test("domain charts replace stale map ranges and unmapped-only state consistentl
   const nc2 = source.protein.domains.find(d => d.label === "NC2");
   const nc2Variants = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2.id));
   assert.equal(nc2Variants.length, 225);
+  await openRangeControls();
   await page.getByLabel("Range start (amino acid)", { exact: true }).fill("1");
   await page.getByLabel("Range end (amino acid)", { exact: true }).fill("25");
   await page.getByRole("button", { name: "Apply residue range", exact: true }).click();
   await expectCount(source.variants.filter(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start <= 25 && v.proteinMapping.end >= 1).length);
+  await openDomainChart();
   const domain = page.locator(".domain-chart-filter").filter({ hasText: "NC2" });
   await domain.click();
   await expectCount(225);
@@ -377,7 +420,7 @@ test("protein regions and subdomains expose rich pointer and keyboard tooltips",
   assert.ok((await tooltip.innerText()).includes(subdomain.label));
   const boundary = `aa ${subdomain.start.toLocaleString("en-US")}–${subdomain.end.toLocaleString("en-US")}`;
   assert.ok((await tooltip.innerText()).includes(boundary));
-  assert.match(await tooltip.innerText(), /matching variants/);
+  assert.match(await tooltip.innerText(), /variants/);
   await control.focus();
   assert.equal(await tooltip.isVisible(), true);
   await control.press("Escape");
@@ -390,18 +433,19 @@ test("protein regions and subdomains expose rich pointer and keyboard tooltips",
   assert.equal(await filterControl("Protein domain").inputValue(), subdomain.id);
 });
 
-test("the dense map retains colored variant positions and supports focus-to-range selection", async () => {
-  const track = page.locator(".variant-position-track");
-  await track.waitFor();
-  const groups = await track.locator("path[data-position-group]").evaluateAll(paths => paths.map(path => ({
-    group: path.getAttribute("data-position-group"),
-    d: path.getAttribute("d"),
-  })));
-  assert.deepEqual(groups.map(item => item.group).sort(), ["benign", "conflicting", "other", "pathogenic", "uncertain"]);
-  assert.ok(groups.some(item => item.d?.length > 0), "Position marks must contain actual mapped residues");
-  const bins = page.locator("[data-position-bin]");
-  assert.ok(await bins.count() > 0);
-  const stop = page.locator("[data-position-bin][tabindex='0']");
+test("the quiet density view offers significance colors without changing the cohort", async () => {
+  assert.equal(await page.locator(".variant-position-track").count(), 0, "The dense repeated position tracks no longer compete with the map");
+  const bins = page.locator("[data-bin]");
+  assert.ok(await bins.count() > 0 && await bins.count() <= 60, "The overview uses a bounded number of density bars");
+  const colorToggle = page.getByRole("button", { name: "Color by significance", exact: true });
+  assert.equal(await colorToggle.getAttribute("aria-pressed"), "false");
+  const initialURL = page.url();
+  const idsBefore = await ids();
+  await colorToggle.click();
+  assert.equal(await colorToggle.getAttribute("aria-pressed"), "true");
+  assert.deepEqual(await ids(), idsBefore);
+  assert.equal(page.url(), initialURL, "A presentation choice must not modify filter state");
+  const stop = page.locator("[data-bin][tabindex='0']");
   assert.equal(await stop.count(), 1);
   await stop.focus();
   const label = await stop.getAttribute("aria-label");
@@ -410,6 +454,81 @@ test("the dense map retains colored variant positions and supports focus-to-rang
   const expected = source.variants.filter(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start <= Number(end) && v.proteinMapping.end >= Number(start));
   await expectCount(expected.length);
   await page.waitForFunction(range => new URLSearchParams(location.search).get("range") === range, `${start}-${end}`);
+  assert.ok(await page.locator("[data-marker]").count() > 0, "Zoom exposes individual variant markers");
+});
+
+test("protein and residue views share hover, keyboard focus and selected-region filters", async () => {
+  const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
+  const nc2 = source.protein.domains.find(d => d.label === "NC2");
+  const subdomain = source.protein.domains.find(d => d.level === "subdomain");
+  const mapSubdomain = page.getByRole("button", { name: `Filter ${subdomain.label}, amino acids ${subdomain.start} to ${subdomain.end}`, exact: true });
+  const diagramNC2 = schematic.getByRole("button", { name: "Select NC2 on protein schematic", exact: true });
+  const initialURL = page.url();
+  await mapSubdomain.hover();
+  await page.waitForFunction(range => {
+    const schematic = document.querySelector(".protein-schematic");
+    return schematic?.dataset.activeStart === String(range[0]) && schematic?.dataset.activeEnd === String(range[1]);
+  }, [subdomain.start, subdomain.end]);
+  const highlightedPaths = await schematic.locator('[data-schematic-highlight="true"]').evaluateAll(paths => paths.filter(path => Boolean(path.getAttribute("d"))).length);
+  assert.ok(highlightedPaths > 0, "Map hover must illuminate a real part of the schematic");
+  assert.equal(page.url(), initialURL, "Hover links the views without changing the cohort");
+  await search().focus();
+  await diagramNC2.focus();
+  await page.waitForFunction(range => {
+    const mark = document.querySelector(".map-linked-highlight");
+    return mark?.dataset.start === String(range[0]) && mark?.dataset.end === String(range[1]);
+  }, [nc2.start, nc2.end]);
+  assert.equal(await schematic.getAttribute("data-rotating"), "false", "Keyboard interaction pauses rotation");
+  await diagramNC2.press("Enter");
+  const expected = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2.id));
+  await expectCount(expected.length);
+  assert.equal(await diagramNC2.getAttribute("aria-pressed"), "true");
+  assert.equal(await filterControl("Protein domain").inputValue(), nc2.id);
+  const pathogenic = expected.filter(v => v.clinicalSignificance.includes("Pathogenic"));
+  assert.equal(await page.getByRole("button", { name: `Filter Pathogenic: ${pathogenic.length} variants in current results`, exact: true }).isVisible(), true);
+  await openDomainChart();
+  await page.getByRole("button", { name: `Filter NC2 and Pathogenic: ${pathogenic.length} variants in current results`, exact: true }).click();
+  await expectCount(pathogenic.length);
+  assert.equal(await diagramNC2.getAttribute("aria-pressed"), "true");
+  await resetAll().click();
+  await expectCount(source.summary.variants);
+  const signal = source.protein.domains.find(d => d.label === "Signal peptide");
+  await page.getByRole("button", { name: `Filter ${signal.label}, amino acids ${signal.start} to ${signal.end}`, exact: true }).focus();
+  await page.waitForFunction(() => document.querySelector(".schematic-context")?.textContent.includes("precursor only; not shown"));
+  assert.match(await schematic.innerText(), /not a resolved structure/);
+});
+
+test("schematic rotation can be paused and adjusted and respects reduced motion", async () => {
+  const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
+  await schematic.scrollIntoViewIfNeeded();
+  await search().focus();
+  await page.mouse.move(0, 0);
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.rotating === "true");
+  await schematic.getByRole("button", { name: "Pause protein rotation", exact: true }).click();
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
+  const angle = schematic.getByRole("slider", { name: "Protein rotation angle", exact: true });
+  await angle.focus();
+  await angle.press("Home");
+  assert.equal(await angle.inputValue(), "0");
+  const pathsBefore = await schematic.locator('[data-schematic-highlight="false"]').evaluateAll(paths => paths.map(path => path.getAttribute("d")));
+  await angle.press("ArrowRight");
+  assert.equal(await angle.inputValue(), "1");
+  const pathsAfter = await schematic.locator('[data-schematic-highlight="false"]').evaluateAll(paths => paths.map(path => path.getAttribute("d")));
+  assert.notDeepEqual(pathsAfter, pathsBefore, "Manual rotation changes the drawn geometry");
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(source.summary.variants);
+  await schematic.scrollIntoViewIfNeeded();
+  await page.mouse.move(0, 0);
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
+  await angle.focus();
+  await angle.press("Home");
+  await angle.press("ArrowRight");
+  assert.equal(await angle.inputValue(), "1", "Manual rotation remains available with reduced motion");
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
 });
 
 test("the consensus preset uses exact review status and keeps graphs and evidence in sync", async () => {
@@ -420,7 +539,7 @@ test("the consensus preset uses exact review status and keeps graphs and evidenc
   await expectCount(expected.length);
   assert.equal(await preset.getAttribute("aria-pressed"), "true");
   assert.equal(await filterControl("Review status").inputValue(), multipleSubmittersReview);
-  assert.match(await page.locator(".summary-heading").innerText(), /928 variants across all pages/);
+  assert.match(await page.locator(".summary-heading").innerText(), /928 matching variants/);
   assert.deepEqual((await ids()).map(x => Number(x.replace(/\D/g, ""))), expected.slice(0, 50).map(v => v.variationId));
   await page.reload({ waitUntil: "networkidle" });
   await expectCount(928);

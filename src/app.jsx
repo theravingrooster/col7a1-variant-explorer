@@ -283,14 +283,15 @@ function Explorer({ data }) {
             </label>
             <p className="search-help sr-only" id="search-help">Search HGVS, rsIDs, conditions, or coordinates. Use <code>id:17423</code> for an exact variant ID, or <code>GRCh38 chr3:48566281</code> for a genomic position. Share this page’s URL to preserve your filters and selected evidence.</p>
             <div className="quick-filters">
-              <span className="workspace-result-count">Evidence filter</span>
               <button className="evidence-preset" aria-pressed={filters.review === MULTIPLE_SUBMITTERS_REVIEW}
                 onClick={() => setFilter("review", filters.review === MULTIPLE_SUBMITTERS_REVIEW ? "" : MULTIPLE_SUBMITTERS_REVIEW)}>
                 Multiple submitters, no conflicts
               </button>
             </div>
-            <details className="advanced-filters" open={showFilters} onToggle={e => setShowFilters(e.currentTarget.open)}>
-              <summary>More filters <span>{[filters.significance, filters.domain, filters.review, filters.mapping, filters.type].filter(Boolean).length || ""}</span></summary>
+            <button className="filter-disclosure" aria-expanded={showFilters} aria-controls="advanced-filter-fields" onClick={() => setShowFilters(value => !value)}>
+              More filters <span>{[filters.significance, filters.domain, filters.review, filters.mapping, filters.type].filter(Boolean).length || ""}</span><span aria-hidden="true">{showFilters ? "−" : "+"}</span>
+            </button>
+            <div className="advanced-filters" id="advanced-filter-fields" hidden={!showFilters}>
               <div className="filter-grid">
               <Select
                 label="Clinical significance"
@@ -334,7 +335,7 @@ function Explorer({ data }) {
                 all="All types"
               />
             </div>
-              </details>
+            </div>
             <div className="active-workspace-filters" aria-label="Active filters">
               {filters.query && <button onClick={() => setFilter("query", "")}>Search: {filters.query} ×</button>}
               {filters.significance && <button onClick={() => setFilter("significance", "")}>{filters.significance === UNCLASSIFIED ? "Not reported" : filters.significance} ×</button>}
@@ -353,33 +354,6 @@ function Explorer({ data }) {
           selected={selected}
           onSelect={setSelected}
         />
-        <section className="stats compact-stats" aria-label="Dataset overview">
-          <div>
-            <span>Unique variants</span>
-            <strong>{num(data.summary.variants)}</strong>
-            <small>{num(data.summary.sourceRows)} ClinVar source rows</small>
-          </div>
-          <div>
-            <span>Mapped to protein</span>
-            <strong>{num(data.summary.mapped)}</strong>
-            <small>Explicit HGVS + residue match</small>
-          </div>
-          <div>
-            <span>Without protein mapping</span>
-            <strong>{num(data.summary.unmapped)}</strong>
-            <small>Retained in the table</small>
-          </div>
-          <div>
-            <span>Annotated subdomains</span>
-            <strong>
-              {data.protein.domains
-                .filter((d) => d.level === "subdomain")
-                .length.toString()
-                .padStart(2, "0")}
-            </strong>
-            <small>Plus NC1, collagenous & NC2 regions</small>
-          </div>
-        </section>
         <div className="panel visual-summary-panel">
           <VisualSummary variants={results} allVariants={variants} protein={data.protein}
             filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} />
