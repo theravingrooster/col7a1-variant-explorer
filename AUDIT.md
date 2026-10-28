@@ -51,3 +51,11 @@ Scope: deployed COL7A1 explorer, React UI, search/filter/export logic, protein/s
 - Browser regression suite expanded to 20 cases. The local browser process remains unavailable in this execution environment; hosted browser interaction is checked separately.
 
 Hosted preview verified: exact 928-record no-conflicts preset; NC2 (225) and NC2+Pathogenic (25) filtering; residues 2790–2810 (26 markers) and invalid-range recovery; keyboard marker tooltip and evidence dialog; explicit 2,254-record unmapped access; URL/theme reload; light/dark map and detail rendering. Downloaded CSVs were parsed and checked against all expected IDs for the 26-record range and the 928-record multi-page review cohort, including source submitter counts and dates.
+
+
+## Coordinated interaction update — October 28, 2026
+
+- Fixed inconsistent chart/dropdown domain transitions that retained a stale range or unmapped-only filter. Shared pure transitions now coordinate every entry point.
+- Added source-position SVG tracks alongside density and rich region/subdomain tooltips with bounded example evidence.
+- Added persistent reset/share/legend/snapshot controls, row activation, full source HGVS and exact feature boundaries in evidence.
+- 81 unit/regression tests pass; build and complete snapshot verification pass. Source data is unchanged. Browser suite expanded to 25 scenarios; local automated execution remains unavailable under the existing environment restriction.

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   EMPTY_FILTERS,
+  GROUPS,
   filterVariants,
   formatNumber as num,
   positionLabel,
@@ -13,6 +14,8 @@ import "./styles.css";
 import "./charts.css";
 import "./theme.css";
 import ThemeToggle from "./ThemeToggle.jsx";
+import ShareViewButton from "./ShareViewButton.jsx";
+import { updateFilter, toggleDomainClassification } from "./filter-actions.mjs";
 import VisualSummary from "./VisualSummary.jsx";
 import ProteinMap from "./ProteinMap.jsx";
 import VariantDetails from "./VariantDetails.jsx";
@@ -159,14 +162,11 @@ function Explorer({ data }) {
     [variants],
   );
   function setFilter(key, value) {
-    setFilters((f) => ({ ...f, [key]: value }));
+    setFilters((f) => updateFilter(f, key, value));
     setPage(0);
   }
   function setDomainClassification(domain, significance) {
-    setFilters(f => ({ ...f,
-      domain: f.domain === domain && f.significance === significance ? "" : domain,
-      significance: f.domain === domain && f.significance === significance ? "" : significance,
-    }));
+    setFilters(f => toggleDomainClassification(f, domain, significance));
     setPage(0);
   }
   function clear() {
@@ -202,7 +202,15 @@ function Explorer({ data }) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  const active = Object.values(filters).some(Boolean);
+  const viewUrl = new URL(location.href);
+  viewUrl.search = writeExplorerState({ filters, sort, page: shownPage, selectedId: selected?.variationId }).toString();
+  viewUrl.hash = "";
+  function openRow(event, variant) {
+    if (event.target.closest("a, button, input, select, textarea, summary")) return;
+    if (window.getSelection()?.toString()) return;
+    event.currentTarget.focus({ preventScroll: true });
+    setSelected(variant);
+  }
   return (
     <>
       <a className="skip-link" href="#variants-title">Skip to variants</a>
@@ -240,9 +248,24 @@ function Explorer({ data }) {
             </div>
           </div>
         </section>
-        <p className="snapshot-note"><strong>Fixed snapshot · Prepared {data.snapshot?.preparedDate || "date not recorded"}</strong>
-          <span> ClinVar release date: {data.sources.clinvar.releaseDate || "unknown"}. UniProt annotation: {data.protein.entryAudit.lastAnnotationUpdateDate}. No automatic refresh.</span>
-        </p>
+        <section className="research-toolbar" aria-label="Research controls">
+          <div className="research-toolbar-main">
+            <div className="toolbar-provenance">
+              <p className="snapshot-note"><strong>Snapshot prepared {data.snapshot?.preparedDate || "date not recorded"}</strong> · ClinVar release {data.sources.clinvar.releaseDate || "unknown"}</p>
+              <p className="toolbar-mapping">Mapping: explicit protein HGVS → Q02388-1, residue checked · 1-based inclusive. <a href="#data-sources" onClick={() => { document.getElementById("source-methods").open = true; }}>Methods</a></p>
+            </div>
+            <div className="toolbar-actions">
+              <ShareViewButton url={viewUrl.href} />
+              <button className="button reset-all" onClick={clear}>Reset all filters</button>
+            </div>
+          </div>
+          <div className="research-toolbar-context">
+            <span className="toolbar-count" aria-live="polite"><strong>{num(results.length)}</strong> matching variants</span>
+            <div className="research-legend" aria-label="Clinical significance color legend">
+              {Object.entries(GROUPS).map(([key, group]) => <span key={key} title={group.label}><i style={{ background: `var(--significance-${key})` }} />{key === "pathogenic" ? "Pathogenic / likely" : key === "uncertain" ? "VUS" : key === "benign" ? "Benign / likely" : group.short}</span>)}
+            </div>
+          </div>
+        </section>
           <section className="panel workspace-controls" aria-labelledby="filters-title">
             <h2 id="filters-title" className="sr-only">Filter the research workspace</h2>
             <label className="search">
@@ -260,12 +283,11 @@ function Explorer({ data }) {
             </label>
             <p className="search-help sr-only" id="search-help">Search HGVS, rsIDs, conditions, or coordinates. Use <code>id:17423</code> for an exact variant ID, or <code>GRCh38 chr3:48566281</code> for a genomic position. Share this page’s URL to preserve your filters and selected evidence.</p>
             <div className="quick-filters">
-              <span className="workspace-result-count" aria-live="polite"><strong>{num(results.length)}</strong> matching variants</span>
+              <span className="workspace-result-count">Evidence filter</span>
               <button className="evidence-preset" aria-pressed={filters.review === MULTIPLE_SUBMITTERS_REVIEW}
                 onClick={() => setFilter("review", filters.review === MULTIPLE_SUBMITTERS_REVIEW ? "" : MULTIPLE_SUBMITTERS_REVIEW)}>
                 Multiple submitters, no conflicts
               </button>
-              <button className="text-button" onClick={clear} disabled={!active}>Clear filters</button>
             </div>
             <details className="advanced-filters" open={showFilters} onToggle={e => setShowFilters(e.currentTarget.open)}>
               <summary>More filters <span>{[filters.significance, filters.domain, filters.review, filters.mapping, filters.type].filter(Boolean).length || ""}</span></summary>
@@ -360,7 +382,7 @@ function Explorer({ data }) {
         </section>
         <div className="panel visual-summary-panel">
           <VisualSummary variants={results} allVariants={variants} protein={data.protein}
-            filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} onClear={clear} />
+            filters={filters} onFilter={setFilter} onDomainClassification={setDomainClassification} />
         </div>
         <section className="panel table-panel" aria-labelledby="variants-title">
           <div className="panel-heading">
@@ -426,7 +448,14 @@ function Explorer({ data }) {
               </thead>
               <tbody>
                 {rows.map((v) => (
-                  <tr key={v.id}>
+                  <tr key={v.id} className="variant-row" data-variant-id={v.variationId} tabIndex={0}
+                    aria-label={`View evidence for variation ${v.variationId}`} aria-haspopup="dialog"
+                    onClick={event => openRow(event, v)}
+                    onKeyDown={event => {
+                      if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault(); setSelected(v);
+                      }
+                    }}>
                     <td>
                       <button
                         className="variant-button mono"
@@ -524,6 +553,7 @@ function Explorer({ data }) {
           variant={selected}
           protein={data.protein}
           data={data}
+          viewUrl={viewUrl.href}
           onClose={() => setSelected(null)}
         />
       )}

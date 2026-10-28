@@ -90,11 +90,11 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 72 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 81 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
-For the 20 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
+For the 25 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
 
 ```sh
 npx playwright install chromium
@@ -129,3 +129,14 @@ Each normalized variant includes `numberSubmitters`: sorted distinct, nonnegativ
 `data.snapshot.preparedDate` records preparation of the supplied files (**2026-10-27**), not the current deployment date or an inferred ClinVar release. New processing runs use an explicit `--prepared-date YYYY-MM-DD`; omit it when that date is not known. UniProt's annotation date remains 2026-09-02. Raw TSV and UniProt source files are unchanged.
 
 Filtered CSV export includes all matching pages and retains c./p. HGVS, clinical significance, exact review status, submitter counts, domain overlaps, inclusive protein positions, ClinVar ID/URL, conditions, genomic coordinates, evaluation dates, source lines/hashes, snapshot dates and mapping provenance. No new remote data source or runtime request was added.
+
+
+## Coordinated exploration and shareable evidence
+
+Every domain selection—map, subdomain, chart or dropdown—starts a consistent region focus. Selecting a new domain clears an earlier residue range and an unmapped-only scope, while preserving text, review and variant-type filters. Selecting unmapped clears spatial constraints. A grouped chart bar changes domain and classification together; selecting it again clears that pair and its residue focus. Filter state, sorting, page and selected evidence remain in the URL.
+
+Dense map views now include five lightweight SVG position paths, colored by clinical-significance group, alongside the histogram. A tick marks a reported anchor position and group; multiple variants can share it. Track segments filter by the same inclusive range rules as density bars. Regions and subdomains expose accessible tooltips with exact boundaries, filtered counts and explicitly bounded example evidence. Individual markers remain available for smaller sets.
+
+A sticky research bar keeps the snapshot/mapping context, color legend, result count, **Reset all filters**, and **Copy view link** available while scrolling. The complete source-category abbreviation legend is displayed above the summary charts. Copying a view includes any open variant evidence; a selectable link appears if clipboard access is unavailable.
+
+Click a noninteractive area of a table row, or press Enter/Space on its focusable row, to open evidence. Nested ClinVar links and text selection retain their normal behavior. Details surface the verbatim accession-qualified source names, all supplied conditions, exact overlapping feature boundaries and direct ClinVar/UniProt links. No source files or datasets were changed for this round.

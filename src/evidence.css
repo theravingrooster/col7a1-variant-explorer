@@ -4,21 +4,33 @@
 .review-conflicting { border-color:#bca7cc; background:#f2ebf7; color:#69477e; }
 .submitter-count { color:var(--text-primary, #203e36); font-size:12px; font-weight:600; line-height:1.5; }
 .review-summary-full { flex-direction:row; align-items:center; flex-wrap:wrap; gap:10px 16px; }
+.review-summary-full .review-badge { font-size:13px; padding:7px 10px; }
+.review-summary-full .review-consensus { font-weight:700; border-left-width:4px; }
 .research-detail .review-source-label { flex-basis:100%; margin:2px 0 0; font-size:13px; color:var(--text-primary, #203e36); }
 .review-source-label > span { color:var(--text-muted, #586b60); }
 .research-detail { width:min(840px, calc(100vw - 40px)); padding:28px; }
 .research-detail .detail-header { position:sticky; top:-28px; z-index:2; background:var(--surface-raised, #fff); padding:16px 0 12px; margin-top:-12px; border-bottom:1px solid var(--border-color, #dfe5dd); }
 .detail-identity { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding-top:20px; }
 .detail-identity > div { min-width:0; }
-.detail-identity > .button { flex-shrink:0; margin-top:4px; }
+.detail-source-links { display:flex; flex-direction:column; gap:8px; flex-shrink:0; margin-top:4px; }
+.detail-source-links .button { justify-content:center; }
 .research-detail .detail-identity h2 { margin:0 0 8px; font-size:24px; }
 .research-detail .protein-hgvs { margin:0 0 14px; color:var(--text-muted, #586b60); }
+.detail-hgvs { margin-top:20px; }
+.research-detail .detail-hgvs h3 { margin:0 0 10px; font-size:14px; }
+.source-hgvs-list { list-style:none; display:grid; gap:8px; padding:0; margin:0; }
+.source-hgvs-list li { padding:10px 12px; background:var(--surface-muted); border:1px solid var(--border-color); border-radius:6px; }
+.source-hgvs-list code { display:block; font-size:12px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--text-primary); }
 .detail-evidence { margin-top:22px; padding:18px; border:1px solid var(--border-color, #dfe5dd); border-radius:8px; background:var(--surface-muted, #f0f3ec); }
 .research-detail .detail-evidence h3 { margin:0 0 12px; font-size:15px; }
 .research-detail .evidence-context { font-size:11px; line-height:1.65; color:var(--text-muted, #586b60); margin:12px 0 0; }
 .research-detail .evidence-facts { border:0; margin:18px 0; padding:0; gap:12px; }
 .evidence-facts > div { border:1px solid var(--border-color, #dfe5dd); border-radius:7px; padding:14px; min-width:0; }
 .evidence-facts small { display:block; font-size:11px; line-height:1.6; margin-top:6px; color:var(--text-muted, #586b60); }
+.detail-domain-list { list-style:none; display:grid; gap:9px; padding:0; margin:0; }
+.detail-domain-list li { display:flex; align-items:baseline; justify-content:space-between; gap:6px 12px; flex-wrap:wrap; }
+.detail-domain-list strong { font-weight:600; }
+.detail-domain-list span { font-size:11px; color:var(--text-muted); white-space:nowrap; }
 .detail-conditions { padding:0 0 20px; }
 .research-detail .detail-conditions h3 { margin:20px 0 10px; }
 .research-detail .conditions { margin:0; }
@@ -30,6 +42,8 @@
 .provenance-facts dt { color:var(--text-muted, #586b60); font-size:11px; margin-bottom:5px; }
 .provenance-facts dd { margin:0; font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
 .detail-provenance > .button { margin-top:16px; }
+.detail-share { margin-top:14px; }
+.detail-share .share-fallback { left:0; right:auto; }
 .research-detail .source-lines code { overflow-wrap:anywhere; }
 :root[data-theme="dark"] .review-consensus, :root[data-theme="dark"] .review-expert { border-color:#557f66; background:#243e30; color:#c1e4ce; }
 :root[data-theme="dark"] .review-conflicting { border-color:#826a98; background:#3b2e47; color:#e0ccef; }
@@ -38,7 +52,7 @@
   .research-detail .detail-header { top:-18px; margin-top:-8px; padding-top:12px; }
   .detail-identity { flex-direction:column; gap:14px; }
   .research-detail .detail-identity h2 { font-size:20px; }
-  .detail-identity > .button { margin:0; }
+  .detail-source-links { margin:0; flex-direction:row; flex-wrap:wrap; }
   .detail-evidence { padding:14px; }
   .provenance-facts { grid-template-columns:1fr; }
   .detail-disclosure > summary > span { display:block; float:none; margin:6px 0 0 16px; }

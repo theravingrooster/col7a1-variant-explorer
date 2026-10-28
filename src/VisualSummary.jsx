@@ -9,13 +9,12 @@ const SHORT_LABELS = {
 };
 const color = (category) => `var(--classification-${category.tone}, ${category.color})`;
 
-export default function VisualSummary({ variants, allVariants, protein, filters, onFilter, onDomainClassification, onClear }) {
+export default function VisualSummary({ variants, allVariants, protein, filters, onFilter, onDomainClassification }) {
   const categories = useMemo(() => classificationSummary(variants, allVariants), [variants, allVariants]);
   const domains = useMemo(() => domainSummary(variants, protein.domains, categories), [variants, protein.domains, categories]);
   const coverage = useMemo(() => chartCoverage(variants, protein.domains), [variants, protein.domains]);
   const maxClassification = Math.max(1, ...categories.map(c => c.count));
   const maxDomain = Math.max(1, ...domains.flatMap(d => d.series.map(c => c.count)));
-  const hasFilters = Object.values(filters).some(Boolean);
   const selectedCategory = categories.find(c => c.key === filters.significance);
   const selectedDomain = protein.domains.find(d => d.id === filters.domain);
   return (
@@ -24,9 +23,8 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
         <div>
           <p className="eyebrow">VISUAL SUMMARY</p>
           <h2 id="summary-title">Current results at a glance</h2>
-          <p><strong>{num(variants.length)}</strong> variants across all pages. Counts reflect every current filter. Selecting a bar replaces its classification or domain filter; select it again to clear it.</p>
+          <p><strong>{num(variants.length)}</strong> variants across all pages. Counts reflect every current filter. Select a bar to filter; select it again to clear. Choosing a domain replaces the previous region or residue range.</p>
         </div>
-        {hasFilters && <button className="button" onClick={onClear}>Reset all filters</button>}
       </div>
       <div className="summary-filter-chips">
         {selectedCategory && <button onClick={() => onFilter("significance", "")} aria-label="Clear clinical significance filter">{selectedCategory.label} ×</button>}
@@ -34,6 +32,9 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
         {filters.range && <button onClick={() => onFilter("range", null)} aria-label="Clear residue range filter">aa {filters.range.join("–")} ×</button>}
       </div>
       {!variants.length && <p className="summary-empty" role="status">No variants match the current filters. Broaden the filters to repopulate these charts.</p>}
+      <div className="chart-legend" aria-label="Classification abbreviations">
+        {categories.map(c => <span key={c.key}><i style={{ background: color(c) }} /><strong>{SHORT_LABELS[c.tone] || c.label}</strong> {c.label}</span>)}
+      </div>
       <div className="summary-chart-grid">
         <article className="summary-card" aria-labelledby="classification-chart-title">
           <div className="chart-card-heading">
@@ -90,9 +91,6 @@ export default function VisualSummary({ variants, allVariants, protein, filters,
           <p className="chart-scroll-hint">Scroll each group sideways to see all classifications →</p>
           <p className="chart-note">Domain totals count unique variants. <strong>{num(coverage.unmapped)}</strong> unmapped and <strong>{num(coverage.outsideMajorDomains)}</strong> mapped outside these three regions are retained in the table.</p>
         </article>
-      </div>
-      <div className="chart-legend" aria-label="Classification abbreviations">
-        {categories.map(c => <span key={c.key}><i style={{ background: color(c) }} /><strong>{SHORT_LABELS[c.tone] || c.label}</strong> {c.label}</span>)}
       </div>
       {(coverage.spanningDomains > 0 || coverage.multipleClassifications > 0) && <p className="chart-note">A variant can appear in more than one domain or source classification. Category counts may overlap and should not be summed to estimate unique variants.</p>}
     </section>

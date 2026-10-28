@@ -29,8 +29,7 @@
 .map-variant-marker:focus-visible { outline:none; }
 .map-variant-marker:focus-visible circle { stroke-width:4; stroke:var(--text-primary); }
 .map-empty-label { fill:var(--text-muted); font-size:16px; }
-.map-evidence-tooltip { position:absolute; right:32px; top:38px; z-index:4; width:min(360px,calc(100% - 64px)); padding:16px; background:var(--surface-raised); color:var(--text-primary); border:1px solid var(--border-color); border-radius:8px; box-shadow:var(--map-tooltip-shadow); pointer-events:auto; font-size:12px; }
-.map-evidence-tooltip.tooltip-left { left:32px; right:auto; }
+.map-evidence-tooltip { position:fixed; z-index:30; width:min(360px,calc(100vw - 24px)); max-height:min(65vh,480px); overflow-y:auto; overscroll-behavior:contain; padding:16px; background:var(--surface-raised); color:var(--text-primary); border:1px solid var(--border-color); border-radius:8px; box-shadow:var(--map-tooltip-shadow); pointer-events:auto; font-size:12px; }
 .map-evidence-tooltip .eyebrow { font-size:9px; margin-bottom:8px; }
 .map-preview-variant { display:grid; gap:4px; line-height:1.4; font-size:11px; overflow-wrap:anywhere; padding-top:10px; margin-top:10px; border-top:1px solid var(--border-color); }
 .map-preview-variant:first-of-type { border:0; margin-top:0; padding-top:0; }
@@ -38,6 +37,12 @@
 .map-preview-variant small { color:var(--text-muted); font-size:10px; }
 .map-preview-variant i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
 .map-tooltip-note { margin:6px 0 0; color:var(--text-muted); line-height:1.5; font-size:11px; }
+.map-marker-hint { font-size:11px; color:var(--text-muted); }
+.position-lane-label { fill:var(--text-muted); font-size:9px; font-family:var(--mono); }
+.position-lane-line { stroke:var(--chart-grid); stroke-width:.7; }
+.position-bin { cursor:pointer; }
+.position-bin:hover rect, .position-bin:focus rect { fill:var(--chart-selected); fill-opacity:.35; }
+.position-bin:focus-visible { outline:2px solid var(--text-primary); outline-offset:1px; }
 .protein-workspace .map-footer { padding-top:12px; }
 .protein-workspace .legend { font-size:11px; }
 .protein-workspace .legend i { width:8px; height:8px; }
@@ -57,7 +62,6 @@
   .map-range-form .button { padding-inline:8px; }
   .map-range-error { margin-inline:16px; }
   .protein-workspace .map-scroll { padding-inline:12px; }
-  .map-evidence-tooltip, .map-evidence-tooltip.tooltip-left { left:20px; right:20px; top:34px; width:auto; }
   .protein-workspace .map-note { font-size:11px; }
   .map-provenance { padding:14px 16px; }
 }

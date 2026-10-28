@@ -34,6 +34,33 @@ export function densityBins(variants, range, targetBins = 120) {
   return { bins, binSize };
 }
 
+/** Compact SVG position lanes. A tick may represent several source variants
+ * sharing the same anchor and significance group; count them without inventing
+ * multiple physical positions. Long intervals crossing into the view are
+ * clamped to its left edge, with that convention exposed in the UI. */
+export function positionTracks(variants, range) {
+  const tracks = new Map(MAP_GROUPS.map(group => [group, new Map()]));
+  for (const variant of variantsInWindow(variants, range)) {
+    const group = MAP_GROUPS.includes(variant.significanceGroup) ? variant.significanceGroup : "other";
+    const position = Math.max(range[0], variant.proteinMapping.start);
+    const points = tracks.get(group);
+    const point = points.get(position) || { position, count: 0, clipped: 0 };
+    point.count++;
+    if (variant.proteinMapping.start < range[0]) point.clipped++;
+    points.set(position, point);
+  }
+  return MAP_GROUPS.map(group => ({
+    group,
+    points: [...tracks.get(group).values()].sort((a, b) => a.position - b.position),
+  }));
+}
+
+/** Domain membership is the same source-derived overlap used by the table. */
+export function regionEvidence(variants, domain, sampleLimit = 2) {
+  const matching = variants.filter(v => v.proteinMapping.domainIds?.includes(domain.id));
+  return { ...domain, total: matching.length, samples: matching.slice(0, sampleLimit) };
+}
+
 export function markerLayout(variants, range, width = 1040) {
   const [start, end] = range;
   const scale = n => (n - start + .5) / (end - start + 1) * width;
