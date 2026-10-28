@@ -2,8 +2,8 @@
 .protein-workspace .panel-heading { align-items:flex-start; padding-bottom:20px; }
 .protein-workspace h2 { font-size:24px; letter-spacing:-.5px; }
 .map-introduction { margin:7px 0 0; max-width:680px; color:var(--text-muted); font-size:13px; line-height:1.6; }
-.protein-explorer-grid { display:grid; grid-template-columns:minmax(280px, .88fr) minmax(0, 1.8fr); gap:28px; padding:0 28px 20px; align-items:start; }
-.residue-workspace { min-width:0; padding-left:28px; border-left:1px solid var(--border-color); }
+.protein-explorer-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; padding:0 28px 20px; align-items:start; }
+.residue-workspace { min-width:0; width:100%; padding-top:22px; border-top:1px solid var(--border-color); }
 .residue-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:2px 0 14px; }
 .residue-heading h3 { margin:0; font-size:15px; font-weight:600; letter-spacing:-.2px; }
 .residue-heading p { margin:5px 0 0; font-size:12px; color:var(--text-primary); }

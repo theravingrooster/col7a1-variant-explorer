@@ -53,6 +53,14 @@
 .research-workspace .table-scroll { max-height:min(62vh,640px); overflow:auto; overscroll-behavior:contain; scrollbar-gutter:stable; scroll-padding-top:48px; }
 .research-workspace .table-scroll table { border-collapse:separate; border-spacing:0; }
 .research-workspace .table-scroll thead th { position:sticky; top:0; z-index:2; box-shadow:0 1px 0 var(--border-color); }
+.column-sort { display:inline-flex; align-items:center; gap:5px; min-height:32px; padding:4px 0; font:inherit; color:inherit; text-align:left; text-transform:inherit; letter-spacing:inherit; }
+.column-sort:hover,.column-sort.is-active { color:var(--text-primary); }
+.column-sort:hover > span:first-child { text-decoration:underline; text-underline-offset:3px; }
+.column-sort .sort-arrow { flex-shrink:0; font-size:13px; opacity:.5; }
+.column-sort.is-active .sort-arrow { opacity:1; }
+.column-sort-pair { display:flex; align-items:center; flex-wrap:wrap; gap:3px 6px; }
+.column-sort-pair > span { opacity:.45; }
+.research-workspace .table-scroll { scroll-padding-top:62px; }
 .research-workspace table { min-width: 1100px; }
 .research-workspace th:first-child, .research-workspace td:first-child { width: 21%; }
 .research-workspace th:nth-child(2) { width: 17%; }

@@ -1,9 +1,9 @@
 import { EMPTY_FILTERS, filterVariants } from "./data-utils.mjs";
 import { UNCLASSIFIED } from "./chart-data.mjs";
+import { SORT_KEYS } from "./variant-sort.mjs";
 
 export const EXPLORER_PAGE_SIZE = 50;
 export const MAX_SEARCH_LENGTH = 500;
-const SORTS = new Set(["id", "id-desc", "position"]);
 const FILTER_KEYS = ["significance", "review", "domain", "mapping", "type"];
 
 function positiveInteger(value) {
@@ -49,7 +49,7 @@ export function readExplorerState(search, data) {
     if (validRange(range, data.protein.length)) filters.range = range;
   }
 
-  const sort = SORTS.has(one("sort")) ? one("sort") : "id";
+  const sort = SORT_KEYS.has(one("sort")) ? one("sort") : "id";
   const requestedPage = positiveInteger(one("page")) ?? 1;
   const lastPage = requestedPage > 1
     ? Math.max(0, Math.ceil(filterVariants(data.variants, filters).length / EXPLORER_PAGE_SIZE) - 1)
@@ -78,7 +78,7 @@ export function writeExplorerState(state = {}) {
     ) params.set(key, value);
   }
   if (validRange(filters.range)) params.set("range", filters.range.join("-"));
-  if (SORTS.has(state?.sort) && state.sort !== "id") params.set("sort", state.sort);
+  if (SORT_KEYS.has(state?.sort) && state.sort !== "id") params.set("sort", state.sort);
   if (Number.isSafeInteger(state?.page) && state.page > 0 && state.page < Number.MAX_SAFE_INTEGER)
     params.set("page", String(state.page + 1));
   if (Number.isSafeInteger(state?.selectedId) && state.selectedId > 0)

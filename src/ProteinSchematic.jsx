@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { intersectRange, linkedSchematicRange, schematicFrame, schematicRegions } from "./schematic-geometry.mjs";
+import { startRotationDrag, moveRotationDrag, endRotationDrag } from "./rotation-drag.mjs";
 import "./protein-schematic.css";
 
 const number = value => value.toLocaleString("en-US");
@@ -12,19 +13,22 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
   const [focusWithin, setFocusWithin] = useState(false);
   const [inView, setInView] = useState(true);
   const [documentVisible, setDocumentVisible] = useState(() => !document.hidden);
-  const rootRef = useRef(null), pathsRef = useRef(new Map()), sliderRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const rootRef = useRef(null), canvasRef = useRef(null), pathsRef = useRef(new Map()), sliderRef = useRef(null);
   const angleRef = useRef(24), rangeRef = useRef(null);
+  const dragRef = useRef(null), cleanupDragRef = useRef(null), endGestureRef = useRef(null), suppressClickRef = useRef(false);
   // The parent coordinates map and schematic hover; one range stays authoritative.
   const highlightRange = linkedRange;
   rangeRef.current = highlightRange;
   const initialFrame = useMemo(() => schematicFrame(regions, 24), [regions]);
-  const animate = running && !pointerInside && !focusWithin && inView && documentVisible;
+  const animate = running && !dragging && !pointerInside && !focusWithin && inView && documentVisible;
   const highlightedRegions = regions.filter(region => intersectRange(highlightRange, [region.start, region.end]));
   const signal = highlightRange && !highlightedRegions.length;
 
   function paint(angle) {
     for (const path of schematicFrame(regions, angle, rangeRef.current)) pathsRef.current.get(path.key)?.setAttribute("d", path.d);
     if (sliderRef.current) sliderRef.current.value = String(Math.round(angle));
+    if (canvasRef.current) canvasRef.current.dataset.angle = angle.toFixed(2);
   }
 
   useEffect(() => {
@@ -39,6 +43,9 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
       query.removeEventListener("change", onMotionChange);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       observer?.disconnect();
+      dragRef.current = null;
+      endGestureRef.current = null;
+      cleanupDragRef.current?.();
     };
   }, []);
 
@@ -62,6 +69,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
   }, [animate, regions]);
 
   function hoverRegion(region) {
+    if (dragRef.current?.dragging) return;
     onRegionHover?.(region);
   }
   function leaveRegion() { hoverRegion(null); }
@@ -71,15 +79,84 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
     paint(angleRef.current);
   }
   function selectRegion(region) { onRegionSelect?.(region); }
+  function beginDrag(event) {
+    if (dragRef.current) return;
+    const initial = startRotationDrag(event, angleRef.current);
+    if (!initial) return;
+    suppressClickRef.current = false;
+    dragRef.current = initial;
+    setPointerInside(true);
+    const canvas = event.currentTarget;
+    const move = pointer => {
+      const previous = dragRef.current;
+      if (!previous || pointer.pointerId !== previous.pointerId) return;
+      const next = moveRotationDrag(previous, pointer);
+      dragRef.current = next;
+      if (!next.dragging) return;
+      if (pointer.cancelable) pointer.preventDefault();
+      if (!previous.dragging) {
+        setRunning(false);
+        setDragging(true);
+        onRegionHover?.(null);
+        try { canvas.setPointerCapture(pointer.pointerId); } catch { /* Pointer may already have been cancelled. */ }
+      }
+      angleRef.current = next.angle;
+      paint(next.angle);
+    };
+    const finish = (pointer, cancelled = false) => {
+      const result = endRotationDrag(dragRef.current, pointer, cancelled);
+      if (!result) return;
+      dragRef.current = null;
+      endGestureRef.current = null;
+      suppressClickRef.current = result.suppressClick;
+      cleanupDragRef.current?.();
+      cleanupDragRef.current = null;
+      setDragging(false);
+      if (result.dragged) {
+        setRunning(false);
+        angleRef.current = result.angle;
+        paint(result.angle);
+      }
+      const bounds = canvas.getBoundingClientRect();
+      const inside = initial.pointerType !== "touch" && !cancelled && pointer && pointer.clientX >= bounds.left && pointer.clientX <= bounds.right && pointer.clientY >= bounds.top && pointer.clientY <= bounds.bottom;
+      setPointerInside(Boolean(inside));
+      if (!inside || result.suppressClick) onRegionHover?.(null);
+    };
+    const release = pointer => finish(pointer);
+    const cancel = pointer => finish(pointer, true);
+    const blur = () => finish(null, true);
+    endGestureRef.current = finish;
+    cleanupDragRef.current = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", blur);
+      try {
+        if (canvas.hasPointerCapture?.(initial.pointerId)) canvas.releasePointerCapture(initial.pointerId);
+      } catch { /* The pointer can become inactive during cancellation or unmount. */ }
+    };
+    window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", blur);
+  }
+  function suppressDragClick(event) {
+    if (suppressClickRef.current && event.detail > 0) {
+      event.preventDefault(); event.stopPropagation();
+      suppressClickRef.current = false;
+    }
+  }
   const focusedLabel = highlightedRegions.length === 1 ? highlightedRegions[0].label : "Selected interval";
 
-  return <section ref={rootRef} className={`protein-schematic${highlightedRegions.length ? " has-highlight" : ""}`} aria-label="Collagen VII schematic"
-    data-rotating={animate ? "true" : "false"} data-active-start={highlightRange?.[0] ?? ""} data-active-end={highlightRange?.[1] ?? ""}
+  return <section ref={rootRef} className={`protein-schematic${highlightedRegions.length ? " has-highlight" : ""}${dragging ? " is-dragging" : ""}`} aria-label="Collagen VII schematic"
+    data-rotating={animate ? "true" : "false"} data-dragging={dragging ? "true" : "false"} data-active-start={highlightRange?.[0] ?? ""} data-active-end={highlightRange?.[1] ?? ""}
     onFocusCapture={event => setFocusWithin(Boolean(event.target.closest(".schematic-region")))}
     onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setFocusWithin(false); leaveRegion(); } }}>
     <div className="schematic-heading"><span>THE WHOLE PROTEIN</span><span className="schematic-tag">Illustrative</span></div>
-    <svg viewBox="0 0 550 224" role="group" aria-label="Rotating illustrative collagen VII schematic" className="schematic-canvas"
-      onMouseEnter={() => setPointerInside(true)} onMouseLeave={() => { setPointerInside(false); leaveRegion(); }}>
+    <svg ref={canvasRef} viewBox="0 0 550 224" role="group" aria-label="Rotating illustrative collagen VII schematic" aria-describedby="schematic-interaction-help" className="schematic-canvas"
+      onPointerDown={beginDrag} onClickCapture={suppressDragClick}
+      onLostPointerCapture={event => { if (event.target === event.currentTarget) endGestureRef.current?.(event, true); }}
+      onPointerEnter={event => { if (event.pointerType !== "touch") setPointerInside(true); }} onPointerLeave={() => { setPointerInside(false); leaveRegion(); }}>
       <title>Illustrative collagen VII homotrimer with linked NC1, collagenous and NC2 regions</title>
       <ellipse cx="276" cy="170" rx="215" ry="8" className="schematic-shadow" />
       <line x1="42" x2="504" y1="178" y2="178" className="schematic-axis" />
@@ -103,6 +180,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
         </g>;
       })}
     </svg>
+    <p className="schematic-interaction-hint" id="schematic-interaction-help">Drag left or right to rotate · click a region to focus. Use the angle slider with a keyboard.</p>
     <div className="schematic-context" aria-live="off">
       {highlightRange ? <><strong>{signal ? "Signal peptide" : focusedLabel}</strong><span>aa {number(highlightRange[0])}–{number(highlightRange[1])}{signal ? " · precursor only; not shown" : " · linked to the residue map"}</span></>
         : <><strong>Three chains. One collagen VII molecule.</strong><span>Hover a region to connect this view to the map.</span></>}

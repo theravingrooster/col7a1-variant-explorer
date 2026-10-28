@@ -1,5 +1,6 @@
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { submitterCounts } from "./evidence.mjs";
+export { sortVariants } from "./variant-sort.mjs";
 
 export const GROUPS = {
   pathogenic: {
@@ -159,17 +160,6 @@ export function filterVariants(variants, filters) {
           m.start <= filters.range[1] &&
           m.end >= filters.range[0]))
     );
-  });
-}
-export function sortVariants(variants, sort) {
-  return [...variants].sort((a, b) => {
-    if (sort === "position")
-      return (
-        (a.proteinMapping.start ?? Infinity) -
-          (b.proteinMapping.start ?? Infinity) || a.variationId - b.variationId
-      );
-    if (sort === "id-desc") return b.variationId - a.variationId;
-    return a.variationId - b.variationId;
   });
 }
 export function histogram(variants, length, binSize = 25) {

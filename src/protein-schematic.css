@@ -1,7 +1,10 @@
-.protein-schematic { --schematic-back:#a8bbb0; --schematic-middle:#819f90; --schematic-front:#547d68; --schematic-linked:#1b755d; padding:18px 20px; min-width:0; background:var(--surface-muted); border-radius:8px; align-self:start; }
+.protein-schematic { --schematic-back:#a8bbb0; --schematic-middle:#819f90; --schematic-front:#547d68; --schematic-linked:#1b755d; display:grid; grid-template-columns:minmax(0,1fr) minmax(230px,auto); column-gap:28px; padding:20px 26px; min-width:0; background:var(--surface-muted); border-radius:8px; align-self:start; }
+.schematic-heading,.schematic-canvas,.schematic-disclaimer { grid-column:1/-1; }
 .schematic-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:9px; letter-spacing:1.4px; color:var(--text-muted); }
 .schematic-tag { letter-spacing:0; font-size:10px; padding:3px 6px; border:1px solid var(--border-color); border-radius:4px; }
-.schematic-canvas { width:100%; height:auto; overflow:visible; display:block; margin-top:12px; }
+.schematic-canvas { width:100%; height:clamp(210px,27vw,300px); overflow:visible; display:block; margin:6px auto 0; user-select:none; -webkit-user-select:none; cursor:grab; touch-action:pan-y; }
+.protein-schematic.is-dragging .schematic-canvas,.protein-schematic.is-dragging .schematic-region { cursor:grabbing; }
+.schematic-interaction-hint { grid-column:1/-1; text-align:center; margin:0 0 16px; color:var(--text-muted); font-size:11px; }
 .schematic-shadow { fill:var(--schematic-back); opacity:.09; }
 .schematic-axis { stroke:var(--border-color); stroke-width:1; }
 .schematic-end-label { fill:var(--text-muted); font-size:11px; font-family:var(--mono); }
@@ -13,7 +16,7 @@
 .schematic-strand.is-linked { stroke:var(--schematic-linked); stroke-width:9; }
 .schematic-strand.is-linked.depth-0 { opacity:.58; }
 .schematic-strand.is-linked.depth-1 { opacity:.8; }
-.schematic-region { cursor:pointer; outline:none; }
+.schematic-region { cursor:grab; outline:none; }
 .schematic-hit-area { fill:transparent; stroke:transparent; stroke-width:1.5; }
 .schematic-region-label { fill:var(--text-muted); font-size:20px; font-weight:600; }
 .schematic-leader { stroke:var(--border-color); stroke-width:1; }
@@ -23,7 +26,7 @@
 .schematic-context { min-height:43px; display:grid; align-content:start; gap:4px; font-size:11px; line-height:1.5; }
 .schematic-context strong { color:var(--text-primary); font-weight:550; }
 .schematic-context span { color:var(--text-muted); font-size:10px; }
-.schematic-controls { display:flex; align-items:center; gap:16px; margin-top:12px; }
+.schematic-controls { display:flex; align-items:center; gap:16px; margin-top:0; align-self:center; }
 .schematic-rotation-button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:34px; min-width:76px; padding:6px 10px; font-size:11px; color:var(--text-primary); background:var(--surface-raised); border:1px solid var(--border-color); border-radius:5px; }
 .schematic-rotation-button span { font-size:15px; line-height:1; }
 .schematic-controls label { display:flex; align-items:center; gap:9px; min-width:0; flex:1; font-size:10px; color:var(--text-muted); }
@@ -31,8 +34,8 @@
 .schematic-disclaimer { margin:12px 0 0; font-size:10px; line-height:1.5; color:var(--text-muted); }
 :root[data-theme="dark"] .protein-schematic { --schematic-back:#526b61; --schematic-middle:#769789; --schematic-front:#a2bdad; --schematic-linked:#b3dfc7; }
 @media(max-width:650px) {
-  .protein-schematic { padding:16px; }
-  .schematic-canvas { max-height:180px; }
+  .protein-schematic { padding:16px; grid-template-columns:minmax(0,1fr); }
+  .schematic-canvas { height:180px; }
   .schematic-context { min-height:43px; }
   .schematic-controls { margin-top:8px; }
   .schematic-controls input { max-width:none; }

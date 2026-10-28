@@ -23,6 +23,7 @@ import ReviewSummary from "./ReviewSummary.jsx";
 import { MULTIPLE_SUBMITTERS_REVIEW } from "./evidence.mjs";
 import "./workspace.css";
 import { UNCLASSIFIED } from "./chart-data.mjs";
+import { SORT_OPTIONS, TABLE_SORT_FIELDS } from "./variant-sort.mjs";
 import { validateDataset } from "./dataset-validation.mjs";
 import { readExplorerState, writeExplorerState, EXPLORER_PAGE_SIZE as PAGE_SIZE, MAX_SEARCH_LENGTH } from "./explorer-state.mjs";
 
@@ -56,6 +57,21 @@ function Select({ label, value, onChange, options, all = "All" }) {
       </select>
     </label>
   );
+}
+function sortDirection(sort, fields) {
+  const field = sort.replace(/-desc$/, "");
+  return fields.includes(field) ? (sort.endsWith("-desc") ? "descending" : "ascending") : "none";
+}
+function SortColumnButton({ field, sort, onSort, children }) {
+  const metadata = TABLE_SORT_FIELDS.find(item => item.key === field);
+  const active = sort.replace(/-desc$/, "") === field;
+  const next = active && !sort.endsWith("-desc") ? `${field}-desc` : field;
+  const direction = next.endsWith("-desc") ? "descending" : "ascending";
+  return <button className={`column-sort${active ? " is-active" : ""}`} data-sort-field={field}
+    aria-label={`Sort by ${metadata.label}, ${direction}`} title={`${metadata.description} Click for ${direction} order.`}
+    onClick={() => onSort(next)}>
+    <span>{children || metadata.label}</span><span className="sort-arrow" aria-hidden="true">{active ? (sort.endsWith("-desc") ? "↓" : "↑") : "↕"}</span>
+  </button>;
 }
 function Sources({ data }) {
   const ref = useRef(null);
@@ -181,6 +197,10 @@ function Explorer({ data }) {
     setPage(next);
     document.getElementById("variants-title")?.focus({ preventScroll: true });
     document.getElementById("variants-title")?.scrollIntoView({ block: "start" });
+  }
+  function changeSort(next) {
+    setSort(next);
+    setPage(0);
   }
   function renderPagination(position) {
     return (
@@ -399,14 +419,9 @@ function Explorer({ data }) {
               <select
                 aria-label="Sort variants"
                 value={sort}
-                onChange={(e) => {
-                  setSort(e.target.value);
-                  setPage(0);
-                }}
+                onChange={(e) => changeSort(e.target.value)}
               >
-                <option value="id">Variation ID ↑</option>
-                <option value="id-desc">Variation ID ↓</option>
-                <option value="position">Protein position ↑</option>
+                {SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
           </div>
@@ -417,12 +432,12 @@ function Explorer({ data }) {
               <caption className="sr-only">Filtered COL7A1 variants with clinical classifications, protein positions, conditions and source evidence.</caption>
               <thead>
                 <tr>
-                  <th scope="col">Variant / HGVS</th>
-                  <th scope="col">Clinical significance</th>
-                  <th scope="col">Review & submitters</th>
-                  <th scope="col">Domain / position</th>
-                  <th scope="col">Conditions</th>
-                  <th scope="col">ClinVar</th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["hgvs"])}><SortColumnButton field="hgvs" sort={sort} onSort={changeSort}>Variant / HGVS</SortColumnButton></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["significance"])}><SortColumnButton field="significance" sort={sort} onSort={changeSort}>Clinical significance</SortColumnButton></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["review", "submitters"])}><div className="column-sort-pair"><SortColumnButton field="review" sort={sort} onSort={changeSort}>Review</SortColumnButton><span aria-hidden="true">/</span><SortColumnButton field="submitters" sort={sort} onSort={changeSort}>Submitters</SortColumnButton></div></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["domain", "position"])}><div className="column-sort-pair"><SortColumnButton field="domain" sort={sort} onSort={changeSort}>Domain</SortColumnButton><span aria-hidden="true">/</span><SortColumnButton field="position" sort={sort} onSort={changeSort}>Position</SortColumnButton></div></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["conditions"])}><SortColumnButton field="conditions" sort={sort} onSort={changeSort}>Conditions</SortColumnButton></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["id"])}><SortColumnButton field="id" sort={sort} onSort={changeSort}>ClinVar</SortColumnButton></th>
                 </tr>
               </thead>
               <tbody>

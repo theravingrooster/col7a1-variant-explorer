@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright";
+import { sortVariants, TABLE_SORT_FIELDS } from "../src/variant-sort.mjs";
 
 // Run after `npm run build`, with `npm run preview` running in another terminal.
 // BASE_URL can point to a deployed preview or production site for a smoke audit.
@@ -295,8 +296,17 @@ test("protein map leads the charts and table, with domain and keyboard range sel
   });
   assert.deepEqual(order, { mapBeforeSummary: true, summaryBeforeTable: true });
   const mapBounds = await page.locator(".protein-map").boundingBox();
-  assert.ok(mapBounds.height > 120 && mapBounds.height < 400, "The default residue map stays compact and readable");
+  assert.ok(mapBounds.height > 120 && mapBounds.height < mapBounds.width * .4, "The full-width residue map keeps its compact proportions");
   assert.equal(await page.getByRole("region", { name: "Collagen VII schematic", exact: true }).isVisible(), true);
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const overview = await page.locator(".protein-schematic").boundingBox();
+    const residues = await page.locator(".residue-workspace").boundingBox();
+    assert.ok(overview.y + overview.height <= residues.y, `The protein overview must sit above the residue map at ${width}px`);
+    assert.ok(Math.abs(overview.width - residues.width) <= 2, `Both protein views use the available width at ${width}px`);
+    await expectNoPageOverflow();
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const nc2 = source.protein.domains.find(d => d.label === "NC2").id;
   const expected = source.variants.filter(v => v.proteinMapping.domainIds.includes(nc2));
   const nc2Region = source.protein.domains.find(d => d.id === nc2);
@@ -546,6 +556,40 @@ test("schematic rotation can be paused and adjusted and respects reduced motion"
   assert.equal(await schematic.getAttribute("data-rotating"), "false");
 });
 
+test("dragging the protein rotates it without filtering and releases safely outside the canvas", async () => {
+  const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
+  const canvas = schematic.locator(".schematic-canvas");
+  const nc1 = source.protein.domains.find(domain => domain.label === "NC1");
+  const region = schematic.getByRole("button", { name: "Select NC1 on protein schematic", exact: true });
+  await canvas.scrollIntoViewIfNeeded();
+  const target = await region.locator(".schematic-hit-area").boundingBox();
+  const bounds = await canvas.boundingBox();
+  const startX = target.x + target.width / 2, startY = target.y + target.height / 2;
+  await page.mouse.move(startX, startY);
+  const initialAngle = Number(await canvas.getAttribute("data-angle"));
+  const initialURL = page.url();
+  await page.mouse.down();
+  await page.mouse.move(startX + 70, startY, { steps: 8 });
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "true");
+  assert.notEqual(Number(await canvas.getAttribute("data-angle")), initialAngle, "Dragging must alter the drawn rotation angle");
+  await page.mouse.move(Math.min(1430, bounds.x + bounds.width + 12), startY, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "false");
+  assert.equal(await schematic.getAttribute("data-rotating"), "false", "Manual drag leaves automatic rotation paused");
+  assert.equal(page.url(), initialURL, "A drag beginning on a region must not also filter it");
+  await expectCount(source.summary.variants);
+  assert.equal(await filterControl("Protein domain").inputValue(), "");
+  await region.click();
+  await expectCount(source.variants.filter(variant => variant.proteinMapping.domainIds.includes(nc1.id)).length);
+  assert.equal(await filterControl("Protein domain").inputValue(), nc1.id, "The next ordinary click must still select the region");
+  await region.press("Enter");
+  await expectCount(source.summary.variants);
+  const slider = schematic.getByRole("slider", { name: "Protein rotation angle", exact: true });
+  await slider.press("Home");
+  await slider.press("ArrowRight");
+  assert.equal(await slider.inputValue(), "1", "Keyboard rotation remains available after dragging");
+});
+
 test("the consensus preset uses exact review status and keeps graphs and evidence in sync", async () => {
   const expected = source.variants.filter(v => v.reviewStatus.includes(multipleSubmittersReview));
   assert.equal(expected.length, 928);
@@ -575,6 +619,73 @@ test("sort and both pagination controls preserve the correct records", async () 
   await query("id:17423", 1);
   for (const next of await page.getByRole("button", { name: "Next page", exact: true }).all())
     assert.equal(await next.isDisabled(), true);
+});
+
+test("every sortable column toggles whole-cohort order and exposes its active direction", async () => {
+  const dropdown = page.getByRole("combobox", { name: "Sort variants", exact: true });
+  for (const field of TABLE_SORT_FIELDS) {
+    // Begin from another column so the first heading click always requests ascending order.
+    await dropdown.selectOption(field.key === "id" ? "hgvs" : "id");
+    const button = page.locator(`[data-sort-field="${field.key}"]`);
+    for (const descending of [false, true]) {
+      const sort = `${field.key}${descending ? "-desc" : ""}`;
+      const expected = sortVariants(source.variants, sort).slice(0, 50).map(variant => variant.variationId);
+      await button.click();
+      await page.waitForFunction(({ sort, first }) =>
+        document.querySelector('[aria-label="Sort variants"]')?.value === sort &&
+        Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first,
+      { sort, first: expected[0] });
+      assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected, sort);
+      assert.equal(await page.locator(`th:has([data-sort-field="${field.key}"])`).getAttribute("aria-sort"), descending ? "descending" : "ascending");
+      assert.equal(await page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]').count(), 1);
+      assert.equal(await dropdown.inputValue(), sort);
+      assert.equal(new URL(page.url()).searchParams.get("sort") || "id", sort);
+      await expectCount(source.summary.variants);
+    }
+  }
+});
+
+test("header sorting preserves filters, resets the scrolled page and survives shared URL reload and CSV export", async () => {
+  await selectFilter("Clinical significance", "Pathogenic");
+  await page.getByRole("button", { name: "Multiple submitters, no conflicts", exact: true }).click();
+  const cohort = source.variants.filter(variant => variant.clinicalSignificance.includes("Pathogenic") && variant.reviewStatus.includes(multipleSubmittersReview));
+  await expectCount(cohort.length);
+  assert.ok(cohort.length > 50);
+  const submitters = page.locator('[data-sort-field="submitters"]');
+  await submitters.click();
+  await submitters.click();
+  const descending = sortVariants(cohort, "submitters-desc");
+  await page.waitForFunction(first => Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first, descending[0].variationId);
+  assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), descending.slice(0, 50).map(variant => variant.variationId));
+  const displayedCounts = descending.slice(0, 50).map(variant => Math.max(...variant.numberSubmitters));
+  assert.ok(displayedCounts.every((count, index) => !index || displayedCounts[index - 1] >= count), "Submitter descending order is numeric across the cohort");
+  await page.getByRole("button", { name: "Next page", exact: true }).last().click();
+  await page.waitForFunction(() => new URLSearchParams(location.search).get("page") === "2");
+  assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), descending.slice(50, 100).map(variant => variant.variationId));
+  const viewport = page.locator(".table-scroll");
+  await viewport.focus();
+  await viewport.press("PageDown");
+  await page.waitForFunction(() => document.querySelector(".table-scroll").scrollTop > 0);
+  await page.locator('[data-sort-field="position"]').click();
+  const expected = sortVariants(cohort, "position");
+  await page.waitForFunction(first => Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first, expected[0].variationId);
+  assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected.slice(0, 50).map(variant => variant.variationId));
+  assert.equal(await viewport.evaluate(element => element.scrollTop), 0);
+  assert.equal(new URL(page.url()).searchParams.has("page"), false);
+  assert.equal(await filterControl("Clinical significance").inputValue(), "Pathogenic");
+  assert.equal(await filterControl("Review status").inputValue(), multipleSubmittersReview);
+  const sortedURL = page.url();
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(cohort.length);
+  assert.equal(page.url(), sortedURL);
+  assert.equal(await page.getByRole("combobox", { name: "Sort variants", exact: true }).inputValue(), "position");
+  assert.equal(await page.locator('th:has([data-sort-field="position"])').getAttribute("aria-sort"), "ascending");
+  assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected.slice(0, 50).map(variant => variant.variationId));
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Export CSV/ }).click();
+  const download = await pending;
+  const exported = csvRows(await readFile(await download.path(), "utf8"));
+  assert.deepEqual(exported.slice(1).map(row => Number(row[0])), expected.map(variant => variant.variationId), "CSV keeps the complete sorted cohort, not only the visible page");
 });
 
 test("research controls stay visible, reset every filter and copy a restorable view URL", async () => {
