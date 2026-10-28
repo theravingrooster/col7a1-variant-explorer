@@ -68,7 +68,7 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
   useEffect(() => {
     if (!hovered) return;
     const dismiss = event => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" || (["PageUp", "PageDown"].includes(event.key) && !event.target?.closest?.("#map-evidence-tooltip"))) {
         clearTimeout(hideTimer.current);
         setHovered(null);
       }
@@ -78,12 +78,19 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
       if (!hovered.keyboard && !event.target?.closest?.("#map-evidence-tooltip")) setHovered(null);
     };
     const dismissOnResize = () => setHovered(null);
+    const dismissOnManualScroll = event => {
+      if (!event.target?.closest?.("#map-evidence-tooltip")) setHovered(null);
+    };
     document.addEventListener("keydown", dismiss);
     window.addEventListener("scroll", dismissOnScroll, true);
+    window.addEventListener("wheel", dismissOnManualScroll, { passive: true });
+    window.addEventListener("touchmove", dismissOnManualScroll, { passive: true });
     window.addEventListener("resize", dismissOnResize);
     return () => {
       document.removeEventListener("keydown", dismiss);
       window.removeEventListener("scroll", dismissOnScroll, true);
+      window.removeEventListener("wheel", dismissOnManualScroll);
+      window.removeEventListener("touchmove", dismissOnManualScroll);
       window.removeEventListener("resize", dismissOnResize);
     };
   }, [hovered]);

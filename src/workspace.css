@@ -88,6 +88,7 @@
   .toolbar-mapping { font-size:10px; }
   .toolbar-actions { width:100%; justify-content:space-between; }
   .toolbar-actions .button { min-height:40px; }
+  .toolbar-actions .share-fallback { left:0; right:auto; width:min(360px,calc(100vw - 56px)); }
   .research-toolbar-context { margin-top:7px; padding-top:7px; gap:7px; }
   .research-legend { gap:5px 10px; font-size:9px; }
   .toolbar-count { font-size:11px; }
