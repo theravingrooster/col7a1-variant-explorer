@@ -2,6 +2,10 @@
 
 A static React research explorer built entirely from the supplied local ClinVar and UniProt files. No API, database, remote fonts, analytics, or runtime data requests to external services. ClinVar and UniProt links open only when clicked.
 
+- Live site: [col7a1-variant-explorer.vercel.app](https://col7a1-variant-explorer.vercel.app)
+- Repository: [theravingrooster/col7a1-variant-explorer](https://github.com/theravingrooster/col7a1-variant-explorer)
+- Vercel project: [Elenchus / col7a1-variant-explorer](https://vercel.com/elenchus/col7a1-variant-explorer)
+
 This is a **fixed data snapshot**, prepared from local files on **2026-10-27**. That is the preparation date, not a verified ClinVar release cutoff. The ClinVar file does not state its release date; the UniProt entry reports an annotation update of **2026-09-02**. The website does not refresh automatically when either source changes.
 
 ## Run and build
@@ -32,6 +36,8 @@ git push origin main
 ```
 
 Check the project's **Deployments** tab in Vercel and wait for **Ready**. To rebuild the same commit without changing files, open its deployment menu and choose **Redeploy**. Vercel retains previous deployments for rollback.
+
+You can also ask ChatGPT to commit and publish changes through the connected GitHub integration; Vercel deploys those `main` updates in the same way. The initial publication used that integration. A ChatGPT connection does not automatically sign the local Git command-line client into GitHub, so the terminal `git push` route requires Git authentication on that machine.
 
 To publish a newer data snapshot, first replace the local source files, run `npm run data`, `npm run verify:data`, `npm test`, and `npm run build`, and update the preparation date and source/version notes here. Commit the regenerated `public/data/` files and `Q02388.json`, then push. Never substitute the deployment date for a source release date. The complete ClinVar archive is needed for regeneration and full verification but is not needed by the hosted site.
 
