@@ -10,13 +10,14 @@ This is a **fixed data snapshot**, prepared from local files on **2026-10-27**. 
 
 ## Run and build
 
-Node.js 22+ and Python 3.9+ are sufficient. Dependencies are already installed in this workspace from the local npm cache, without downloads.
+Node.js 22+ and Python 3.9+ are sufficient. Install the pinned dependencies with `npm ci`.
 
 ```sh
 npm run dev          # build and serve at http://127.0.0.1:3000
 npm run build        # static site in dist/
-npm test             # 10 processor + 5 frontend logic tests
-npm run verify:data  # full comparison against original local source files
+npm test             # processor, schema, search/filter/export, and URL-state tests
+npm run verify:snapshot # validate all committed rows, variants, and mappings
+npm run verify:data  # full comparison, requires the original ClinVar archive
 ```
 
 The local server rebuilds at startup, not on file changes; restart after editing. On a new machine, install the pinned packages with `npm ci` first (requires cached packages or network access). `dist/` is self-contained and can also be served by `python3 -m http.server 3000 --directory dist` without Node dependencies.
@@ -78,6 +79,31 @@ Example: variation **17423**, `c.8393T>A (p.Met2798Lys)`, maps to **NC2** at res
 
 ## Interface
 
-Search HGVS, IDs, conditions, or genomic coordinates; combine classification, domain, review, mapping, and type filters. The map groups variants into 25-residue bins at their first reported residue; bar/domain selections filter the table by interval overlap. Open a variant to inspect source lines and hashes. CSV export includes **all filtered results**, across all pages, with quoted fields and spreadsheet formula protection. Source JSON and TSV downloads are available under “Source files & mapping methods.”
+Search HGVS, IDs, conditions, or genomic coordinates; combine classification, domain, review, mapping, and type filters. The map groups variants into 25-residue bins at their first reported residue; bar/domain selections filter the table by interval overlap. Open a variant to inspect source lines and hashes. Exact searches support `id:17423`, `allele:32462`, `rs121912828`, accession-qualified HGVS, and assembly-specific coordinates such as `GRCh38 chr3:48566281`. Coordinate searches use inclusive interval overlap and keep assembly/reference matching on the same source record. Plain text searches retain their original partial-match behavior.
+
+Filters, sorting, page, and selected evidence are stored in the URL, so views can be bookmarked or shared. Unknown or malformed URL values are ignored. A skip link and arrow-key chart navigation make the explorer usable without tabbing through every bar. Pagination is available above and below the table and returns focus to the results heading.
+
+CSV export includes **all filtered results**, across all pages, with quoted fields and spreadsheet formula protection. Source JSON and TSV downloads are available under “Source files & mapping methods.”
 
 Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (source audit), `src/app.jsx` (React UI), `src/data-utils.mjs` (filter/map/export logic), `src/styles.css` (responsive layout). Dependency versions and cached archive checksums used for this offline build are recorded in `scripts/local-dependencies.json`.
+
+
+## Verification after changes
+
+`npm test` runs 42 unit and regression tests. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+
+The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
+
+For the 11 browser regression cases, install Chromium on a machine that permits browser processes, build, and start the preview in another terminal:
+
+```sh
+npx playwright install chromium
+npm run build
+npm run preview
+# In another terminal:
+npm run test:browser
+```
+
+Set `BASE_URL` to test an accessible deployment. `CHROME_BIN` can select a compatible existing browser. The browser suite covers search, combined filters, chart navigation, pagination, evidence focus/dismissal, CSV/download integrity, 320/390/768/1440-pixel layouts, URL restoration, and network/malformed-data recovery. Browser tests are separate from `npm test`; a successful unit run does not imply the browser suite ran.
+
+See [AUDIT.md](AUDIT.md) for the review findings, fixes, and verification limits.

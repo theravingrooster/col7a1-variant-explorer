@@ -1,17 +1,13 @@
 import { build } from "esbuild";
-import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { validateDataset } from "../src/dataset-validation.mjs";
 const root = fileURLToPath(new URL("../", import.meta.url));
 process.chdir(root);
 const bytes = await readFile("public/data/variants.json");
-const data = JSON.parse(bytes);
-if (
-  data.schemaVersion !== "1.0.0" ||
-  data.variants.length !== data.summary.variants
-)
-  throw new Error("Invalid preprocessed dataset; run npm run data");
+const data = validateDataset(JSON.parse(bytes));
 for (const [file, expected] of [
   ["Q02388.json", data.sources.uniprot.sha256],
   ["public/data/clinvar-col7a1.tsv", data.sources.clinvar.extractedSha256],
@@ -23,6 +19,9 @@ for (const [file, expected] of [
   )
     throw new Error(`Source hash mismatch: ${file}`);
 }
+// Stale assets must not survive a deployment; validate inputs before replacing
+// the previous build so an invalid dataset leaves the working build intact.
+await rm("dist", { recursive: true, force: true });
 await mkdir("dist/assets", { recursive: true });
 await cp("public", "dist", { recursive: true });
 await copyFile("Q02388.json", "dist/data/Q02388.json");

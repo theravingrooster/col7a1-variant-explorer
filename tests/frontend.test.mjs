@@ -8,6 +8,7 @@ import {
   variantsCsv,
   csvCell,
   sortVariants,
+  searchableText,
 } from "../src/data-utils.mjs";
 const data = JSON.parse(
   await readFile(new URL("../public/data/variants.json", import.meta.url)),
@@ -20,6 +21,56 @@ test("search returns the source variant by HGVS and variation ID", () => {
   );
   assert.ok(filter({ query: "17423" }).some((v) => v.variationId === 17423));
   assert.equal(filter({ query: "nonexistent-hgvs-xyz" }).length, 0);
+});
+test("search indexes source identifiers and accession-qualified HGVS", () => {
+  for (const query of [
+    "rs121912828",
+    "ClinGen:CA257933",
+    "NM_000094.4:c.8393T>A",
+  ]) {
+    assert.ok(filter({ query }).some((v) => v.variationId === 17423), query);
+  }
+  // The browser uses precomputed search text; it must produce identical results.
+  const indexed = data.variants.map((v) => ({ ...v, searchText: searchableText(v) }));
+  assert.deepEqual(
+    filterVariants(indexed, { ...EMPTY_FILTERS, query: "rs121912828" }).map((v) => v.variationId),
+    filter({ query: "rs121912828" }).map((v) => v.variationId),
+  );
+});
+test("explicit identifier searches match complete variation and allele IDs", () => {
+  assert.deepEqual(filter({ query: "id:17423" }).map((v) => v.variationId), [17423]);
+  assert.deepEqual(filter({ query: "variation:17423" }).map((v) => v.variationId), [17423]);
+  assert.ok(!filter({ query: "id:1742" }).some((v) => v.variationId === 17423));
+  assert.ok(filter({ query: "allele:32462" }).some((v) => v.variationId === 17423));
+  assert.equal(filter({ query: "id:17423", mapping: "unmapped" }).length, 0);
+});
+test("genomic coordinate searches support chromosome, accession, and assembly qualifiers", () => {
+  for (const query of [
+    "chr3:48566281",
+    "3:48,566,281",
+    "NC_000003.12:48566281",
+    "NC_000003.12: 48566281 – 48566281",
+    "GRCh38 NC_000003:48566281",
+    "GRCh38 chr3:48566280-48566282",
+    "GRCh37 NC_000003.11:48603714",
+  ]) {
+    assert.ok(filter({ query }).some((v) => v.variationId === 17423), query);
+  }
+  for (const query of [
+    "GRCh37 chr3:48566281",
+    "GRCh38 NC_000003.11:48603714",
+    "chr2:48566281",
+    "chr3:48566282-48566280",
+    "chr3:0",
+  ]) {
+    assert.ok(!filter({ query }).some((v) => v.variationId === 17423), query);
+  }
+});
+test("genomic coordinate search finds a position inside a reported variant span", () => {
+  const variant = data.variants.find((v) => v.genomicPositions.some((p) => p.end - p.start > 2));
+  const position = variant.genomicPositions.find((p) => p.end - p.start > 2);
+  assert.ok(filter({ query: `${position.assembly} chr${position.chromosome}:${position.start + 1}` })
+    .some((v) => v.variationId === variant.variationId));
 });
 test("compound filters use AND; unmapped variants remain searchable", () => {
   const nc2 = data.protein.domains.find((d) => d.label === "NC2").id;

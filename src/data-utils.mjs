@@ -43,6 +43,14 @@ export function searchableText(v) {
     v.variationId,
     ...v.alleleIds,
     ...v.names,
+    // Accept the accession:HGVS form as well as ClinVar's accession(gene):HGVS.
+    ...v.names.map((name) => name.replace(/\([^)]*\)(?=:[cgnmr]\.)/gi, "")),
+    ...(v.codingHgvs || []),
+    ...(v.proteinHgvs || []),
+    ...(v.dbSnpIds || [])
+      .filter((id) => /^\d+$/.test(id))
+      .flatMap((id) => [id, `rs${id}`]),
+    ...(v.otherIds || []),
     ...v.geneSymbols,
     ...v.conditions,
     ...v.conditionIdentifiers,
@@ -59,13 +67,82 @@ export function searchableText(v) {
     .join(" ")
     .toLowerCase();
 }
+
+function searchQuery(query) {
+  const terms = query
+    .toLowerCase()
+    // Preserve coordinates copied from the evidence panel as a single term.
+    .replace(
+      /\b((?:chr)?(?:\d{1,2}|x|y|m|mt)|n[ct]_\d+(?:\.\d+)?)\s*:\s*(\d[\d,]*)(?:\s*([-–])\s*(\d[\d,]*))?/g,
+      (_, reference, start, separator, end) =>
+        `${reference}:${start}${separator ? `-${end}` : ""}`,
+    )
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const coordinates = [];
+  const identifiers = [];
+  const text = [];
+  for (const term of terms) {
+    const coordinate = term.match(
+      /^((?:chr)?(?:\d{1,2}|x|y|m|mt)|n[ct]_\d+(?:\.\d+)?):(\d[\d,]*)(?:[-–](\d[\d,]*))?$/,
+    );
+    const identifier = term.match(/^(id|variation|allele):(\d+)$/);
+    if (coordinate) {
+      const start = Number(coordinate[2].replaceAll(",", ""));
+      const end = Number((coordinate[3] || coordinate[2]).replaceAll(",", ""));
+      coordinates.push({ reference: coordinate[1], start, end });
+    } else if (identifier) {
+      identifiers.push({ kind: identifier[1], value: Number(identifier[2]) });
+    } else text.push(term);
+  }
+  // Assembly qualifiers must describe the same genomic position as the query.
+  const assemblies = coordinates.length
+    ? text.filter((t) => /^grch\d+$/.test(t))
+    : [];
+  return {
+    coordinates,
+    identifiers,
+    assemblies,
+    terms: text.filter((t) => !assemblies.includes(t)),
+  };
+}
+
+function matchesCoordinates(v, { coordinates, assemblies }) {
+  return coordinates.every(({ reference, start, end }) => {
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 1 ||
+      end < start
+    )
+      return false;
+    const chromosome = reference.replace(/^chr/, "").replace(/^m$/, "mt");
+    return v.genomicPositions.some(
+      (p) =>
+        Number.isSafeInteger(p.start) &&
+        Number.isSafeInteger(p.end) &&
+        p.start <= end &&
+        p.end >= start &&
+        assemblies.every((a) => p.assembly?.toLowerCase() === a) &&
+        (p.chromosomeAccession?.toLowerCase() === reference ||
+          (!reference.includes(".") &&
+            p.chromosomeAccession?.toLowerCase().split(".")[0] === reference) ||
+          p.chromosome?.toLowerCase().replace(/^chr/, "").replace(/^m$/, "mt") === chromosome),
+    );
+  });
+}
+
 export function filterVariants(variants, filters) {
-  const terms = filters.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const query = searchQuery(filters.query);
   return variants.filter((v) => {
     const m = v.proteinMapping;
     return (
-      (!terms.length ||
-        terms.every((t) => (v.searchText ?? searchableText(v)).includes(t))) &&
+      query.terms.every((t) => (v.searchText ?? searchableText(v)).includes(t)) &&
+      query.identifiers.every(({ kind, value }) =>
+        kind === "allele" ? v.alleleIds.includes(value) : v.variationId === value,
+      ) &&
+      matchesCoordinates(v, query) &&
       (!filters.significance ||
         v.clinicalSignificance.includes(filters.significance)) &&
       (!filters.review || v.reviewStatus.includes(filters.review)) &&
