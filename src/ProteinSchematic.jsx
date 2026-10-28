@@ -183,7 +183,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
     data-rotating={animate ? "true" : "false"} data-dragging={dragging ? "true" : "false"} data-active-start={highlightRange?.[0] ?? ""} data-active-end={highlightRange?.[1] ?? ""}
     onFocusCapture={event => setFocusWithin(Boolean(event.target.closest(".schematic-region, .schematic-canvas")))}
     onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) { setFocusWithin(false); leaveRegion(); } }}>
-    <div className="schematic-heading"><span>THE WHOLE PROTEIN</span><span className="schematic-tag">Illustrative 3D schematic</span></div>
+    <div className="schematic-heading"><span>PROCOLLAGEN VII · THREE-CHAIN MOLECULE</span><span className="schematic-tag">Before NC2 processing</span></div>
     <div className="schematic-viewer">
       <svg ref={canvasRef} viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} role="group" tabIndex="0" aria-label="Interactive 3D collagen VII schematic" aria-describedby="schematic-interaction-help schematic-keyboard-help" className="schematic-canvas"
         onKeyDown={keyboardView} onPointerDown={beginDrag} onClickCapture={suppressDragClick} onContextMenu={event => event.preventDefault()}
@@ -194,7 +194,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
           const id = event.target.closest("[data-schematic-path-region]")?.dataset.schematicPathRegion;
           hoverRegion(regions.find(region => region.id === id) || null);
         }} onPointerLeave={() => { setPointerInside(false); leaveRegion(); }}>
-        <title>Illustrative collagen VII homotrimer. Drag in any direction to rotate in three dimensions.</title>
+        <title>Illustrative procollagen VII homotrimer before NC2 processing; signal peptide omitted. Drag in any direction to rotate in three dimensions.</title>
         <g aria-hidden="true" className="schematic-strands">
           {initialFrame.map(path => {
             const region = regions.find(item => item.id === path.regionId);
@@ -223,13 +223,20 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
     </div>
     <div className="schematic-context" aria-live="off">
       {highlightRange ? <><strong>{signal ? "Signal peptide" : focusedLabel}</strong><span>aa {number(highlightRange[0])}–{number(highlightRange[1])}{signal ? " · precursor only; not shown" : " · linked to the residue map"}</span></>
-        : <><strong>Three chains. One collagen VII molecule.</strong><span>Hover or click the protein or a region to connect with the map.</span></>}
+        : <><strong>Three α1(VII) chains. One procollagen VII molecule.</strong><span>Hover or click the protein or a region to connect with the map.</span></>}
     </div>
     <div className="schematic-controls">
       <button className="schematic-rotation-button" type="button" aria-label={running ? "Pause protein rotation" : "Start protein rotation"}
         onClick={() => setRunning(value => !value)}><span aria-hidden="true">{running ? "Ⅱ" : "↻"}</span>{running ? "Pause" : "Auto rotate"}</button>
       <details className="schematic-keyboard"><summary>Controls</summary><p id="schematic-keyboard-help">Drag with one finger to rotate on touchscreens. With the viewer focused: arrow keys rotate, Shift + arrows pan, + / − zoom, and Home resets the view. Click a region to filter.</p></details>
     </div>
-    <p className="schematic-disclaimer">Schematic, not a resolved structure. Region shapes and lengths are not to scale.</p>
+    <div className="schematic-notes">
+      <p className="schematic-disclaimer">Synthetic schematic, not an experimental or AlphaFold structure. Shapes and lengths are not to scale.</p>
+      <details className="schematic-assembly"><summary>From molecule to anchoring fibril</summary><div>
+        <p>Three α1(VII) chains assemble into one procollagen VII homotrimer. This view shows that molecule before NC2 processing, with the signal peptide omitted.</p>
+        <p>Outside the cell, NC2 processing accompanies antiparallel dimer assembly: two molecules overlap at their C-terminal ends. Dimers associate laterally into anchoring fibrils that help attach the epidermal basement membrane to the underlying dermis.</p>
+        <p>Only part of NC2 is removed. BMP-1 cleaves between Ala2821 and Asp2822, releasing the C-terminal propeptide while retaining the preceding NC2 segment. <a href="https://pubmed.ncbi.nlm.nih.gov/11986329/" target="_blank" rel="noreferrer">Rattenholl et al., 2002 ↗</a></p>
+      </div></details>
+    </div>
   </section>;
 }

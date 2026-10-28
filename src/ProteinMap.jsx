@@ -261,7 +261,12 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
     </div>
     <details className="map-reading-notes"><summary>How to read this map</summary><div>
       <p id="map-instructions">Each dot is one variant; horizontal lines show reported spans. Stacked bars show counts by clinical significance, with total height showing all variants in a bin. VUS means uncertain significance; pathogenic and benign groups each include their likely classifications. Density counts each variant once at its first reported residue, or the left edge when its interval crosses into view. Filters use interval overlap. Frameshifts show only their reported anchor. The short indicator beneath the subdomains marks the linked residues; evidence appears below the chart. Use left/right arrows, Home/End, and Enter to explore; Escape clears the hover details.</p>
-      <p>Mapping uses explicit protein HGVS linked to Q02388-1 with endpoint residues checked against its sequence. Domain boundaries are 1-based, inclusive UniProt intervals. The sequence map includes the signal peptide; the rotating schematic depicts the mature homotrimer without it. Domain overlap does not establish clinical effect.</p>
+      <p>Mapping uses explicit protein HGVS linked to Q02388-1 with endpoint residues checked against its sequence. Domain boundaries are 1-based, inclusive UniProt intervals. The sequence map includes the signal peptide; the rotating schematic shows a procollagen VII homotrimer with the signal peptide omitted and NC2 still intact. Domain overlap does not establish clinical effect.</p>
+    </div></details>
+    <details className="map-reading-notes"><summary>Why no amino-acid position?</summary><div>
+      <p>DNA variants do not always have a direct amino-acid position. Intronic variants and variants in untranslated regions (UTRs) lie outside the protein-coding sequence. A splice variant may change the protein, but its exact effect can remain unknown without RNA or other supporting evidence. HGVS uses <code>p.?</code> when a protein consequence cannot be reliably predicted.</p>
+      <p>Other records may lack a protein HGVS description or a verified match to this reference protein. This map uses explicit, sequence-checked protein annotations and does not infer amino-acid positions from DNA coordinates. Open a variant’s evidence to see its mapping reason.</p>
+      <p><strong>Missing protein mapping does not mean benign.</strong> These records remain available in the table and through the “without protein mapping” filter. <a href="https://hgvs-nomenclature.org/stable/recommendations/uncertain/" target="_blank" rel="noreferrer">HGVS uncertain consequences ↗</a></p>
     </div></details>
   </section>;
 }

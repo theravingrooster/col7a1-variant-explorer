@@ -4,6 +4,10 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { chromium } from "playwright";
 import { sortVariants, TABLE_SORT_FIELDS } from "../src/variant-sort.mjs";
+import { EMPTY_FILTERS, filterVariants } from "../src/data-utils.mjs";
+import { normalizeColumnFilters } from "../src/column-filters.mjs";
+import { readExplorerState } from "../src/explorer-state.mjs";
+import { classificationSummary } from "../src/chart-data.mjs";
 
 // Run after `npm run build`, with `npm run preview` running in another terminal.
 // BASE_URL can point to a deployed preview or production site for a smoke audit.
@@ -30,6 +34,23 @@ async function openDomainChart() {
 async function selectFilter(label, value) {
   await openFilters();
   await filterControl(label).selectOption(value);
+}
+const columnTrigger = field => page.locator(`[data-column-filter="${field}"]`);
+async function openColumnFilter(field) {
+  await columnTrigger(field).click();
+  const dialog = page.locator("dialog.column-filter-dialog");
+  await dialog.waitFor({ state: "visible" });
+  return dialog;
+}
+async function sortColumn(field, descending = false) {
+  const dialog = await openColumnFilter(field);
+  const metadata = TABLE_SORT_FIELDS.find(item => item.key === field);
+  await dialog.getByRole("button", { name: descending ? metadata.descendingLabel : metadata.ascendingLabel, exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+}
+async function applyColumnFilter(dialog) {
+  await dialog.getByRole("button", { name: "Apply filter", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
 }
 async function expectCount(count) {
   await page.waitForFunction((expected) =>
@@ -809,22 +830,21 @@ test("sort and both pagination controls preserve the correct records", async () 
     assert.equal(await next.isDisabled(), true);
 });
 
-test("every sortable column toggles whole-cohort order and exposes its active direction", async () => {
+test("every column menu sorts the whole cohort and exposes its active direction", async () => {
   const dropdown = page.getByRole("combobox", { name: "Sort variants", exact: true });
   for (const field of TABLE_SORT_FIELDS) {
-    // Begin from another column so the first heading click always requests ascending order.
+    // Begin from another column, then request each direction explicitly inside its menu.
     await dropdown.selectOption(field.key === "id" ? "hgvs" : "id");
-    const button = page.locator(`[data-sort-field="${field.key}"]`);
     for (const descending of [false, true]) {
       const sort = `${field.key}${descending ? "-desc" : ""}`;
       const expected = sortVariants(source.variants, sort).slice(0, 50).map(variant => variant.variationId);
-      await button.click();
+      await sortColumn(field.key, descending);
       await page.waitForFunction(({ sort, first }) =>
         document.querySelector('[aria-label="Sort variants"]')?.value === sort &&
         Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first,
       { sort, first: expected[0] });
       assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected, sort);
-      assert.equal(await page.locator(`th:has([data-sort-field="${field.key}"])`).getAttribute("aria-sort"), descending ? "descending" : "ascending");
+      assert.equal(await page.locator(`th:has([data-column-filter="${field.key}"])`).getAttribute("aria-sort"), descending ? "descending" : "ascending");
       assert.equal(await page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]').count(), 1);
       assert.equal(await dropdown.inputValue(), sort);
       assert.equal(new URL(page.url()).searchParams.get("sort") || "id", sort);
@@ -839,9 +859,7 @@ test("header sorting preserves filters, resets the scrolled page and survives sh
   const cohort = source.variants.filter(variant => variant.clinicalSignificance.includes("Pathogenic") && variant.reviewStatus.includes(multipleSubmittersReview));
   await expectCount(cohort.length);
   assert.ok(cohort.length > 50);
-  const submitters = page.locator('[data-sort-field="submitters"]');
-  await submitters.click();
-  await submitters.click();
+  await sortColumn("submitters", true);
   const descending = sortVariants(cohort, "submitters-desc");
   await page.waitForFunction(first => Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first, descending[0].variationId);
   assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), descending.slice(0, 50).map(variant => variant.variationId));
@@ -854,7 +872,7 @@ test("header sorting preserves filters, resets the scrolled page and survives sh
   await viewport.focus();
   await viewport.press("PageDown");
   await page.waitForFunction(() => document.querySelector(".table-scroll").scrollTop > 0);
-  await page.locator('[data-sort-field="position"]').click();
+  await sortColumn("position");
   const expected = sortVariants(cohort, "position");
   await page.waitForFunction(first => Number(document.querySelector("tbody .clinvar-link")?.textContent.replace(/\D/g, "")) === first, expected[0].variationId);
   assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected.slice(0, 50).map(variant => variant.variationId));
@@ -867,13 +885,116 @@ test("header sorting preserves filters, resets the scrolled page and survives sh
   await expectCount(cohort.length);
   assert.equal(page.url(), sortedURL);
   assert.equal(await page.getByRole("combobox", { name: "Sort variants", exact: true }).inputValue(), "position");
-  assert.equal(await page.locator('th:has([data-sort-field="position"])').getAttribute("aria-sort"), "ascending");
+  assert.equal(await page.locator('th:has([data-column-filter="position"])').getAttribute("aria-sort"), "ascending");
   assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected.slice(0, 50).map(variant => variant.variationId));
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: /Export CSV/ }).click();
   const download = await pending;
   const exported = csvRows(await readFile(await download.path(), "utf8"));
   assert.deepEqual(exported.slice(1).map(row => Number(row[0])), expected.map(variant => variant.variationId), "CSV keeps the complete sorted cohort, not only the visible page");
+});
+
+test("column multiselects and numeric ranges synchronize table, map, charts, URL and full CSV", async () => {
+  const columns = {
+    significance: ["Pathogenic", "Likely pathogenic"],
+    submitters: { min: "2", max: "10" },
+    position: { start: "1254", end: "2784" },
+  };
+  await selectFilter("Variant type", "single nucleotide variant");
+  let dialog = await openColumnFilter("significance");
+  for (const value of columns.significance)
+    await dialog.locator(`input[type="checkbox"][value="${value}"]`).check();
+  // Checkboxes edit a draft; the cohort changes only on Apply.
+  await expectCount(filterVariants(source.variants, { ...EMPTY_FILTERS, type: "single nucleotide variant" }).length);
+  await applyColumnFilter(dialog);
+  await expectCount(filterVariants(source.variants, { ...EMPTY_FILTERS, type: "single nucleotide variant", columns: { significance: columns.significance } }).length);
+  dialog = await openColumnFilter("submitters");
+  await dialog.getByLabel("Minimum submitters", { exact: true }).fill(columns.submitters.min);
+  await dialog.getByLabel("Maximum submitters", { exact: true }).fill(columns.submitters.max);
+  await applyColumnFilter(dialog);
+  dialog = await openColumnFilter("position");
+  await dialog.getByLabel("First residue", { exact: true }).fill(columns.position.start);
+  await dialog.getByLabel("Last residue", { exact: true }).fill(columns.position.end);
+  await applyColumnFilter(dialog);
+  const expected = sortVariants(filterVariants(source.variants, { ...EMPTY_FILTERS, type: "single nucleotide variant", columns }), "id");
+  assert.ok(expected.length > 50, "The cohort must span more than the visible page to exercise export scope");
+  await expectCount(expected.length);
+  assert.deepEqual((await ids()).map(value => Number(value.replace(/\D/g, ""))), expected.slice(0, 50).map(variant => variant.variationId));
+  assert.equal(await page.locator(".summary-heading strong").innerText(), expected.length.toLocaleString("en-US"));
+  assert.deepEqual((await page.locator(".classification-bars .chart-count").allTextContents()).map(value => Number(value.replaceAll(",", ""))), classificationSummary(expected, source.variants).map(category => category.count));
+  const mapped = expected.filter(variant => variant.proteinMapping.status === "mapped").length;
+  assert.match(await page.locator(".protein-panel .map-summary").innerText(), new RegExp(`${mapped.toLocaleString("en-US")} mapped variants`));
+  for (const field of ["significance", "submitters", "position"])
+    assert.match(await columnTrigger(field).getAttribute("aria-label"), /filter active/);
+  const sharedURL = page.url();
+  const restored = readExplorerState(new URL(sharedURL).search, source);
+  assert.deepEqual(restored.filters.columns, normalizeColumnFilters(columns, source));
+  assert.equal(restored.filters.type, "single nucleotide variant");
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(expected.length);
+  assert.equal(page.url(), sharedURL);
+  dialog = await openColumnFilter("significance");
+  for (const value of columns.significance)
+    assert.equal(await dialog.locator(`input[type="checkbox"][value="${value}"]`).isChecked(), true);
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  const pending = page.waitForEvent("download");
+  await page.getByRole("button", { name: /Export CSV/ }).click();
+  const download = await pending;
+  const exported = csvRows(await readFile(await download.path(), "utf8"));
+  assert.deepEqual(exported.slice(1).map(row => Number(row[0])), expected.map(variant => variant.variationId));
+  await resetAll().click();
+  await expectCount(source.summary.variants);
+  assert.equal(new URL(page.url()).searchParams.has("columns"), false);
+  assert.equal(await page.locator(".column-filter-trigger.is-filtered").count(), 0);
+});
+
+test("column drafts cancel without changing results, invalid ranges stay editable, and clearing keeps other filters", async () => {
+  const initialURL = page.url();
+  let dialog = await openColumnFilter("significance");
+  await dialog.locator('input[type="checkbox"][value="Pathogenic"]').check();
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(page.url(), initialURL);
+  await expectCount(source.summary.variants);
+  assert.equal(await columnTrigger("significance").evaluate(element => element === document.activeElement), true);
+  dialog = await openColumnFilter("significance");
+  assert.equal(await dialog.locator('input[type="checkbox"][value="Pathogenic"]').isChecked(), false);
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+
+  dialog = await openColumnFilter("position");
+  await dialog.getByLabel("First residue", { exact: true }).fill("2800");
+  await dialog.getByLabel("Last residue", { exact: true }).fill("2700");
+  await dialog.getByRole("button", { name: "Apply filter", exact: true }).click();
+  assert.match(await dialog.getByRole("alert").innerText(), /first residue.*no greater than.*last residue/i);
+  assert.equal(await dialog.isVisible(), true);
+  assert.equal(page.url(), initialURL);
+  await expectCount(source.summary.variants);
+  await dialog.getByLabel("First residue", { exact: true }).fill("");
+  await dialog.getByLabel("Last residue", { exact: true }).fill("");
+  await dialog.locator('input[type="checkbox"][value="unmapped"]').check();
+  await applyColumnFilter(dialog);
+  const unmapped = source.variants.filter(variant => variant.proteinMapping.status === "unmapped");
+  await expectCount(unmapped.length);
+
+  const nc2 = source.protein.domains.find(domain => domain.level === "region" && domain.label === "NC2");
+  dialog = await openColumnFilter("domain");
+  await dialog.getByRole("searchbox").fill("NC2");
+  await dialog.locator(`input[type="checkbox"][value="${nc2.id}"]`).check();
+  await applyColumnFilter(dialog);
+  await expectCount(0);
+  assert.equal(await page.getByRole("button", { name: /Export CSV/ }).isDisabled(), true);
+  dialog = await openColumnFilter("domain");
+  await dialog.getByRole("button", { name: "Clear column filter", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await expectCount(unmapped.length);
+  assert.deepEqual(readExplorerState(new URL(page.url()).search, source).filters.columns, { mapping: ["unmapped"] });
+  dialog = await openColumnFilter("position");
+  await dialog.getByRole("button", { name: "Clear column filter", exact: true }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await expectCount(source.summary.variants);
+  assert.equal(new URL(page.url()).searchParams.has("columns"), false);
 });
 
 test("research controls stay visible, reset every filter and copy a restorable view URL", async () => {

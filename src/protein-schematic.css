@@ -2,9 +2,9 @@
 .protein-schematic [data-protein-domain="NC1"] { --domain-color:var(--map-nc1); }
 .protein-schematic [data-protein-domain="Collagenous"] { --domain-color:var(--map-collagen); }
 .protein-schematic [data-protein-domain="NC2"] { --domain-color:var(--map-nc2); }
-.schematic-heading,.schematic-viewer,.schematic-region-list,.schematic-disclaimer { grid-column:1/-1; }
+.schematic-heading,.schematic-viewer,.schematic-region-list,.schematic-notes { grid-column:1/-1; }
 .schematic-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:9px; letter-spacing:1.4px; color:var(--text-muted); }
-.schematic-tag { letter-spacing:0; font-size:10px; padding:3px 6px; border:1px solid var(--border-color); border-radius:4px; }
+.schematic-tag { letter-spacing:0; font-size:10px; padding:3px 6px; border:1px solid var(--border-color); border-radius:4px; flex:none; }
 .schematic-viewer { position:relative; min-width:0; margin:8px 0 12px; border-radius:8px; overflow:hidden; }
 .schematic-canvas { width:100%; height:clamp(280px,30vw,360px); overflow:hidden; display:block; user-select:none; -webkit-user-select:none; cursor:grab; touch-action:none; --protein-zoom:1; }
 .schematic-canvas:focus-visible { outline:2px solid var(--schematic-linked); outline-offset:-3px; border-radius:8px; }
@@ -38,7 +38,14 @@
 .schematic-keyboard { font-size:11px; color:var(--text-muted); position:relative; }
 .schematic-keyboard summary { cursor:pointer; padding:8px 0; }
 .schematic-keyboard p { position:absolute; bottom:100%; right:0; width:250px; background:var(--surface-raised); border:1px solid var(--border-color); padding:12px; border-radius:6px; line-height:1.6; z-index:2; box-shadow:0 5px 18px #00000012; }
-.schematic-disclaimer { margin:12px 0 0; font-size:10px; line-height:1.5; color:var(--text-muted); }
+.schematic-notes { display:flex; align-items:baseline; flex-wrap:wrap; column-gap:16px; row-gap:4px; margin-top:12px; }
+.schematic-disclaimer { flex:1 1 360px; margin:0; font-size:10px; line-height:1.5; color:var(--text-muted); }
+.schematic-assembly { font-size:10px; line-height:1.6; color:var(--text-muted); }
+.schematic-assembly summary { cursor:pointer; }
+.schematic-assembly[open] { flex-basis:100%; }
+.schematic-assembly > div { max-width:900px; margin-top:8px; font-size:11px; }
+.schematic-assembly p { margin:0 0 8px; }
+.schematic-assembly a { color:var(--text-primary); text-underline-offset:2px; }
 :root[data-theme="dark"] .protein-schematic { --schematic-linked:#b3dfc7; }
 @media(max-width:650px) {
   .protein-schematic { padding:16px; grid-template-columns:minmax(0,1fr); }

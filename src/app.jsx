@@ -28,6 +28,8 @@ import { MULTIPLE_SUBMITTERS_REVIEW } from "./evidence.mjs";
 import "./workspace.css";
 import { UNCLASSIFIED } from "./chart-data.mjs";
 import { SORT_OPTIONS, TABLE_SORT_FIELDS } from "./variant-sort.mjs";
+import ColumnFilterMenu from "./ColumnFilterMenu.jsx";
+import { buildColumnFilterOptions, clearColumnFilter, isColumnFilterActive, normalizeColumnFilters } from "./column-filters.mjs";
 import { validateDataset } from "./dataset-validation.mjs";
 import { conditionDisplayLabel } from "./condition-labels.mjs";
 import { readExplorerState, writeExplorerState, EXPLORER_PAGE_SIZE as PAGE_SIZE, MAX_SEARCH_LENGTH } from "./explorer-state.mjs";
@@ -66,17 +68,6 @@ function Select({ label, value, onChange, options, all = "All" }) {
 function sortDirection(sort, fields) {
   const field = sort.replace(/-desc$/, "");
   return fields.includes(field) ? (sort.endsWith("-desc") ? "descending" : "ascending") : "none";
-}
-function SortColumnButton({ field, sort, onSort, children }) {
-  const metadata = TABLE_SORT_FIELDS.find(item => item.key === field);
-  const active = sort.replace(/-desc$/, "") === field;
-  const next = active && !sort.endsWith("-desc") ? `${field}-desc` : field;
-  const direction = next.endsWith("-desc") ? "descending" : "ascending";
-  return <button className={`column-sort${active ? " is-active" : ""}`} data-sort-field={field}
-    aria-label={`Sort by ${metadata.label}, ${direction}`} title={`${metadata.description} Click for ${direction} order.`}
-    onClick={() => onSort(next)}>
-    <span>{children || metadata.label}</span><span className="sort-arrow" aria-hidden="true">{active ? (sort.endsWith("-desc") ? "↓" : "↑") : "↕"}</span>
-  </button>;
 }
 function Sources({ data }) {
   const ref = useRef(null);
@@ -213,8 +204,18 @@ function Explorer({ data }) {
       ),
     [variants],
   );
+  const columnOptions = useMemo(() => ({ ...buildColumnFilterOptions(variants, data.protein), proteinLength: data.protein.length }), [variants, data.protein]);
+  const activeColumnFields = TABLE_SORT_FIELDS.filter(field => isColumnFilterActive(filters.columns, field.key));
+  const hasProteinFilters = filters.mapping === "mapped" || filters.domain || filters.range || filters.columns?.domain?.length || filters.columns?.position || filters.columns?.mapping?.includes("mapped");
+  function clearProteinFilters() {
+    setFilters(f => ({ ...f, mapping: "", domain: "", range: null, columns: clearColumnFilter(clearColumnFilter(f.columns, "domain"), "position") }));
+    setPage(0);
+  }
+  function columnHeader(field, label) {
+    return <ColumnFilterMenu field={field} label={label} columns={filters.columns} options={columnOptions} sort={sort} onSort={changeSort} onChange={next => setFilter("columns", next)} />;
+  }
   function setFilter(key, value) {
-    setFilters((f) => updateFilter(f, key, value));
+    setFilters((f) => updateFilter(f, key, key === "columns" ? normalizeColumnFilters(value, data) : value));
     setPage(0);
   }
   function setDomainClassification(domain, significance) {
@@ -413,7 +414,7 @@ function Explorer({ data }) {
               <Select label="Molecular change (HGVS pattern)" value={filters.pattern} onChange={v => setFilter("pattern", v)} options={HGVS_PATTERN_OPTIONS} all="All HGVS patterns" />
               <p className="research-focus-note">Source labels and reported HGVS. Supports mapped and unmapped variants; protein-position filters still apply. <a href="#research-filter-methods" onClick={() => { document.getElementById("source-methods").open = true; }}>How these filters work</a></p>
               {filters.condition && <p className="research-focus-note">Matches explicit condition labels. Generic DEB and incomplete summaries may be missed; clinical significance remains the variant-level ClinVar aggregate.</p>}
-              {filters.pattern === "splice-site" && <p className="research-focus-note">Splice-site ±1/2 SNVs often have no protein position. Clear mapped-only, domain, or residue-range filters to include unmapped records. This pattern does not establish a functional splice effect. {(filters.mapping === "mapped" || filters.domain || filters.range) && <button className="text-button" onClick={() => { setFilters(f => ({ ...f, mapping: "", domain: "", range: null })); setPage(0); }}>Clear protein-position filters</button>}</p>}
+              {filters.pattern === "splice-site" && <p className="research-focus-note">Splice-site ±1/2 SNVs often have no protein position. Clear mapped-only, domain, or residue-range filters to include unmapped records. This pattern does not establish a functional splice effect. {hasProteinFilters && <button className="text-button" onClick={clearProteinFilters}>Clear protein-position filters</button>}</p>}
             </div>
             <div className="active-workspace-filters" aria-label="Active filters">
               {filters.query && <button onClick={() => setFilter("query", "")}>Search: {filters.query} ×</button>}
@@ -425,6 +426,7 @@ function Explorer({ data }) {
               {filters.condition && <button onClick={() => setFilter("condition", "")}>{CONDITION_OPTIONS.find(option => option.value === filters.condition)?.label} ×</button>}
               {filters.pattern && <button onClick={() => setFilter("pattern", "")}>{HGVS_PATTERN_OPTIONS.find(option => option.value === filters.pattern)?.label} ×</button>}
               {filters.range && <button onClick={() => setFilter("range", null)}>aa {filters.range.join("–")} ×</button>}
+              {activeColumnFields.map(field => <button key={field.key} aria-label={`Clear ${field.label} column filter`} onClick={() => setFilter("columns", clearColumnFilter(filters.columns, field.key))}>Column: {field.label} ×</button>)}
             </div>
           </section>
         <ProteinMap
@@ -483,18 +485,18 @@ function Explorer({ data }) {
             </label>
           </div>
           {renderPagination("Top")}
-          <p className="table-scroll-hint" id="table-scroll-help">Scroll inside the table to browse this page of variants.</p>
+          <p className="table-scroll-hint" id="table-scroll-help">Click a column heading to choose filters or sort. Scroll inside the table to browse this page of variants.</p>
           <div ref={tableScrollRef} className="table-scroll" role="region" aria-label="Variant results table; scroll vertically for rows and horizontally for all columns" aria-describedby="table-scroll-help" tabIndex={0}>
             <table>
               <caption className="sr-only">Filtered COL7A1 variants with clinical classifications, protein positions, conditions and source evidence.</caption>
               <thead>
                 <tr>
-                  <th scope="col" aria-sort={sortDirection(sort, ["hgvs"])}><SortColumnButton field="hgvs" sort={sort} onSort={changeSort}>Variant / HGVS</SortColumnButton></th>
-                  <th scope="col" aria-sort={sortDirection(sort, ["significance"])}><SortColumnButton field="significance" sort={sort} onSort={changeSort}>Clinical significance</SortColumnButton></th>
-                  <th scope="col" aria-sort={sortDirection(sort, ["review", "submitters"])}><div className="column-sort-pair"><SortColumnButton field="review" sort={sort} onSort={changeSort}>Review</SortColumnButton><span aria-hidden="true">/</span><SortColumnButton field="submitters" sort={sort} onSort={changeSort}>Submitters</SortColumnButton></div></th>
-                  <th scope="col" aria-sort={sortDirection(sort, ["domain", "position"])}><div className="column-sort-pair"><SortColumnButton field="domain" sort={sort} onSort={changeSort}>Domain</SortColumnButton><span aria-hidden="true">/</span><SortColumnButton field="position" sort={sort} onSort={changeSort}>Position</SortColumnButton></div></th>
-                  <th scope="col" aria-sort={sortDirection(sort, ["conditions"])}><SortColumnButton field="conditions" sort={sort} onSort={changeSort}>Conditions</SortColumnButton></th>
-                  <th scope="col" aria-sort={sortDirection(sort, ["id"])}><SortColumnButton field="id" sort={sort} onSort={changeSort}>ClinVar</SortColumnButton></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["hgvs"])}>{columnHeader("hgvs", "Variant / HGVS")}</th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["significance"])}>{columnHeader("significance", "Clinical significance")}</th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["review", "submitters"])}><div className="column-sort-pair">{columnHeader("review", "Review")}<span aria-hidden="true">/</span>{columnHeader("submitters", "Submitters")}</div></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["domain", "position"])}><div className="column-sort-pair">{columnHeader("domain", "Domain")}<span aria-hidden="true">/</span>{columnHeader("position", "Position")}</div></th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["conditions"])}>{columnHeader("conditions", "Conditions")}</th>
+                  <th scope="col" aria-sort={sortDirection(sort, ["id"])}>{columnHeader("id", "ClinVar")}</th>
                 </tr>
               </thead>
               <tbody>

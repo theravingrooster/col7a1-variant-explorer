@@ -2,6 +2,7 @@ import { UNCLASSIFIED } from "./chart-data.mjs";
 import { submitterCounts } from "./evidence.mjs";
 import { conditionDisplayLabel, expandConditionQuery } from "./condition-labels.mjs";
 import { researchAnnotations } from "./research-data.mjs";
+import { columnFilterPredicate } from "./column-filters.mjs";
 export { sortVariants } from "./variant-sort.mjs";
 
 export const GROUPS = {
@@ -37,6 +38,7 @@ export const EMPTY_FILTERS = {
   condition: "",
   pattern: "",
   range: null,
+  columns: {},
 };
 export const formatNumber = (n) => new Intl.NumberFormat("en-US").format(n);
 export const humanReason = (s) => (s || "").replaceAll("_", " ");
@@ -144,6 +146,7 @@ function matchesCoordinates(v, { coordinates, assemblies }) {
 
 export function filterVariants(variants, filters) {
   const query = searchQuery(filters.query);
+  const matchesColumns = columnFilterPredicate(filters.columns);
   return variants.filter((v) => {
     const m = v.proteinMapping;
     const research = filters.condition || filters.pattern ? (v.research ?? researchAnnotations(v)) : null;
@@ -153,6 +156,7 @@ export function filterVariants(variants, filters) {
         kind === "allele" ? v.alleleIds.includes(value) : v.variationId === value,
       ) &&
       matchesCoordinates(v, query) &&
+      matchesColumns(v) &&
       (!filters.significance ||
         (filters.significance === UNCLASSIFIED
           ? v.clinicalSignificance.length === 0

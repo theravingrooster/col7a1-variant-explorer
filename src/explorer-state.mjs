@@ -3,6 +3,7 @@ import { UNCLASSIFIED } from "./chart-data.mjs";
 import { SORT_KEYS } from "./variant-sort.mjs";
 import { CONDITION_OPTIONS, HGVS_PATTERN_OPTIONS } from "./research-data.mjs";
 import { parseShortlistParam, serializeShortlistIds } from "./shortlist-state.mjs";
+import { normalizeColumnFilters } from "./column-filters.mjs";
 
 export const EXPLORER_PAGE_SIZE = 50;
 export const MAX_SEARCH_LENGTH = 500;
@@ -52,6 +53,7 @@ export function readExplorerState(search, data) {
     const range = rangeText.split("-").map(Number);
     if (validRange(range, data.protein.length)) filters.range = range;
   }
+  filters.columns = normalizeColumnFilters(one("columns"), data);
 
   const sort = SORT_KEYS.has(one("sort")) ? one("sort") : "id";
   const requestedPage = positiveInteger(one("page")) ?? 1;
@@ -86,6 +88,8 @@ export function writeExplorerState(state = {}) {
     ) params.set(key, value);
   }
   if (validRange(filters.range)) params.set("range", filters.range.join("-"));
+  const columns = normalizeColumnFilters(filters.columns);
+  if (Object.keys(columns).length) params.set("columns", JSON.stringify(columns));
   if (SORT_KEYS.has(state?.sort) && state.sort !== "id") params.set("sort", state.sort);
   if (Number.isSafeInteger(state?.page) && state.page > 0 && state.page < Number.MAX_SAFE_INTEGER)
     params.set("page", String(state.page + 1));
