@@ -199,7 +199,7 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
           {initialFrame.map(path => {
             const region = regions.find(item => item.id === path.regionId);
             return <path key={path.key} ref={node => { if (node) pathsRef.current.set(path.key, node); else pathsRef.current.delete(path.key); }}
-              d={path.d} data-schematic-highlight={path.highlighted ? "true" : "false"} data-schematic-path-region={path.regionId}
+              d={path.d} data-protein-domain={region.label} data-schematic-highlight={path.highlighted ? "true" : "false"} data-schematic-path-region={path.regionId}
               className={`schematic-strand depth-${path.depth}${path.highlighted ? " is-linked" : ""}`}
               onClick={() => onRegionSelect?.(region)}><title>{`${region.label} · aa ${number(region.start)}–${number(region.end)}`}</title></path>;
           })}
@@ -213,9 +213,9 @@ export default function ProteinSchematic({ protein, activeRange = null, selected
       </div>
     </div>
     <p className="schematic-interaction-hint" id="schematic-interaction-help">Drag in any direction to rotate · scroll to zoom · right-drag or Ctrl-drag to pan.</p>
-    <div className="schematic-region-list" role="group" aria-label="Select a protein region">
+    <div className="schematic-region-list" role="group" aria-label="Protein domain colors and selection">
       {regions.map(region => <button key={region.id} type="button" aria-label={`Select ${region.label} on protein schematic`}
-        aria-pressed={selectedDomain === region.id} data-schematic-region={region.id} data-active={intersectRange(highlightRange, [region.start, region.end]) ? "true" : "false"}
+        aria-pressed={selectedDomain === region.id} data-protein-domain={region.label} data-schematic-region={region.id} data-active={intersectRange(highlightRange, [region.start, region.end]) ? "true" : "false"}
         className="schematic-region" onPointerEnter={event => { if (event.pointerType !== "touch") hoverRegion(region); }} onPointerLeave={leaveRegion}
         onFocus={() => hoverRegion(region)} onBlur={leaveRegion} onClick={() => onRegionSelect?.(region)}>
         <span>{region.label}</span><small>aa {number(region.start)}–{number(region.end)}</small>

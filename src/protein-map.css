@@ -1,4 +1,4 @@
-.protein-workspace { --map-tooltip-shadow:0 10px 32px #1c35252b; --map-density:#8ca99b; --map-nc1:#607f7b; --map-collagen:#9daf9e; --map-nc2:#6c7f98; position:relative; }
+.protein-workspace { --map-tooltip-shadow:0 10px 32px #1c35252b; --map-density:#8ca99b; --map-nc1:#3478b8; --map-collagen:#237c69; --map-nc2:#8552a8; --map-domain-text:#fff; position:relative; }
 .protein-workspace .panel-heading { align-items:flex-start; padding-bottom:20px; }
 .protein-workspace h2 { font-size:24px; letter-spacing:-.5px; }
 .map-introduction { margin:7px 0 0; max-width:680px; color:var(--text-muted); font-size:13px; line-height:1.6; }
@@ -28,8 +28,8 @@
 .map-plot-container { position:relative; }
 .protein-workspace .svg-caption { font-size:14px; letter-spacing:.1px; fill:var(--text-muted); }
 .protein-workspace .map-count-label,.protein-workspace .axis-label { font-size:14px; fill:var(--text-muted); }
-.protein-workspace .domain-label { font-size:16px; fill:#fff; }
-.protein-workspace .domain-collagenous + .domain-label { fill:#203e36; }
+.protein-workspace .domain-label { font-size:16px; fill:var(--map-domain-text); }
+.protein-workspace .domain-collagenous + .domain-label { fill:var(--map-domain-text); }
 .protein-workspace .domain-block .domain-nc1 { fill:var(--map-nc1); }
 .protein-workspace .domain-block .domain-collagenous { fill:var(--map-collagen); }
 .protein-workspace .domain-block .domain-nc2 { fill:var(--map-nc2); }
@@ -67,7 +67,7 @@
 .map-reading-notes[open] summary::before { content:"−"; }
 .map-reading-notes > div { padding:0 0 16px; font-size:11px; line-height:1.7; color:var(--text-muted); max-width:900px; }
 .map-reading-notes p { margin:0 0 8px; }
-:root[data-theme="dark"] .protein-workspace { --map-tooltip-shadow:0 10px 32px #0006; --map-density:#688c7e; --map-nc1:#4d7e76; --map-collagen:#9cae9b; --map-nc2:#5d799e; }
+:root[data-theme="dark"] .protein-workspace { --map-tooltip-shadow:0 10px 32px #0006; --map-density:#688c7e; --map-nc1:#79b2ee; --map-collagen:#59c6b1; --map-nc2:#bf99e3; --map-domain-text:#10201b; }
 :root[data-theme="dark"] .map-range-error { color:#ffaca0; }
 @media(max-width:1100px) {
   .protein-explorer-grid { grid-template-columns:1fr; gap:20px; }

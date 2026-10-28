@@ -142,12 +142,12 @@
 :root[data-theme="dark"] :is(.svg-caption, .axis-label) { fill: var(--chart-axis); }
 :root[data-theme="dark"] .grid-line { stroke: var(--chart-grid); }
 :root[data-theme="dark"] .domain-block rect { stroke: #17251f; }
-:root[data-theme="dark"] .domain-block .domain-nc1 { fill: #456c55; }
-:root[data-theme="dark"] .domain-block .domain-collagenous { fill: #a1b494; }
-:root[data-theme="dark"] .domain-block .domain-nc2 { fill: #536d4d; }
+:root[data-theme="dark"] .domain-block .domain-nc1 { fill: var(--map-nc1); }
+:root[data-theme="dark"] .domain-block .domain-collagenous { fill: var(--map-collagen); }
+:root[data-theme="dark"] .domain-block .domain-nc2 { fill: var(--map-nc2); }
 :root[data-theme="dark"] .domain-block .domain-signal-peptide { fill: #83947c; }
-:root[data-theme="dark"] .domain-label { fill: #fff; }
-:root[data-theme="dark"] .domain-collagenous + .domain-label { fill: #1d3525; }
+:root[data-theme="dark"] .domain-label { fill: var(--map-domain-text); }
+:root[data-theme="dark"] .domain-collagenous + .domain-label { fill: var(--map-domain-text); }
 :root[data-theme="dark"] .domain-block .active-domain { stroke: #c3f3d0; stroke-width: 3; }
 :root[data-theme="dark"] .subdomain-block rect { fill: #5b775f; stroke: #17251f; }
 :root[data-theme="dark"] .subdomain-block:hover rect { fill: #8ba98b; }

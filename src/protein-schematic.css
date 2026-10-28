@@ -1,4 +1,7 @@
-.protein-schematic { --schematic-back:#a8bbb0; --schematic-middle:#819f90; --schematic-front:#547d68; --schematic-linked:#1b755d; display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:28px; padding:20px 24px; min-width:0; background:var(--surface-muted); border-radius:8px; align-self:start; }
+.protein-schematic { --schematic-linked:#1b755d; display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:28px; padding:20px 24px; min-width:0; background:var(--surface-muted); border-radius:8px; align-self:start; }
+.protein-schematic [data-protein-domain="NC1"] { --domain-color:var(--map-nc1); }
+.protein-schematic [data-protein-domain="Collagenous"] { --domain-color:var(--map-collagen); }
+.protein-schematic [data-protein-domain="NC2"] { --domain-color:var(--map-nc2); }
 .schematic-heading,.schematic-viewer,.schematic-region-list,.schematic-disclaimer { grid-column:1/-1; }
 .schematic-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:9px; letter-spacing:1.4px; color:var(--text-muted); }
 .schematic-tag { letter-spacing:0; font-size:10px; padding:3px 6px; border:1px solid var(--border-color); border-radius:4px; }
@@ -8,13 +11,13 @@
 .protein-schematic.is-dragging .schematic-canvas,.protein-schematic.is-dragging .schematic-strand { cursor:grabbing; }
 .schematic-interaction-hint { grid-column:1/-1; text-align:center; margin:0 0 18px; color:var(--text-muted); font-size:11px; line-height:1.6; }
 .schematic-strand { fill:none; stroke-linecap:round; stroke-linejoin:round; pointer-events:stroke; cursor:grab; }
-.schematic-strand.depth-0 { stroke:var(--schematic-back); stroke-width:calc(6px * var(--protein-zoom)); }
-.schematic-strand.depth-1 { stroke:var(--schematic-middle); stroke-width:calc(6.5px * var(--protein-zoom)); }
-.schematic-strand.depth-2 { stroke:var(--schematic-front); stroke-width:calc(7px * var(--protein-zoom)); }
-.has-highlight .schematic-strand:not(.is-linked) { opacity:.4; }
-.schematic-strand.is-linked { stroke:var(--schematic-linked); stroke-width:calc(9px * var(--protein-zoom)); }
-.schematic-strand.is-linked.depth-0 { opacity:.58; }
-.schematic-strand.is-linked.depth-1 { opacity:.8; }
+.schematic-strand.depth-0 { stroke:color-mix(in srgb,var(--domain-color) 62%,var(--surface-muted)); stroke-width:calc(6px * var(--protein-zoom)); }
+.schematic-strand.depth-1 { stroke:color-mix(in srgb,var(--domain-color) 82%,var(--surface-muted)); stroke-width:calc(6.5px * var(--protein-zoom)); }
+.schematic-strand.depth-2 { stroke:var(--domain-color); stroke-width:calc(7px * var(--protein-zoom)); }
+.has-highlight .schematic-strand:not(.is-linked) { opacity:.55; }
+.schematic-strand.is-linked { stroke:var(--domain-color); stroke-width:calc(9px * var(--protein-zoom)); }
+.schematic-strand.is-linked.depth-0 { opacity:.75; }
+.schematic-strand.is-linked.depth-1 { opacity:.9; }
 .schematic-view-tools { position:absolute; bottom:8px; right:8px; display:flex; align-items:center; gap:1px; padding:3px; background:var(--surface-raised); border:1px solid var(--border-color); border-radius:7px; box-shadow:0 2px 6px #00000006; }
 .schematic-view-tools button { min-width:34px; min-height:34px; border:0; background:transparent; color:var(--text-primary); border-radius:4px; font-size:18px; }
 .schematic-view-tools button:hover { background:var(--surface-muted); }
@@ -22,8 +25,10 @@
 .schematic-view-tools .schematic-reset { border-left:1px solid var(--border-color); padding:0 12px; margin-left:4px; font-size:11px; border-radius:0 4px 4px 0; }
 .schematic-region-list { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
 .schematic-region { display:flex; align-items:center; gap:10px; padding:9px 14px; min-height:38px; background:var(--surface-raised); border:1px solid var(--border-color); border-radius:6px; color:var(--text-primary); font-size:12px; cursor:pointer; }
+.schematic-region > span { display:inline-flex; align-items:center; gap:7px; }
+.schematic-region > span::before { content:""; width:9px; height:9px; flex:none; border-radius:3px; background:var(--domain-color); }
 .schematic-region small { color:var(--text-muted); font-size:10px; }
-.schematic-region[data-active="true"],.schematic-region[aria-pressed="true"] { border-color:var(--schematic-linked); color:var(--schematic-linked); }
+.schematic-region[data-active="true"],.schematic-region[aria-pressed="true"] { border-color:var(--domain-color); box-shadow:inset 0 0 0 1px var(--domain-color); }
 .schematic-context { min-height:43px; display:grid; align-content:start; gap:4px; font-size:11px; line-height:1.5; }
 .schematic-context strong { color:var(--text-primary); font-weight:550; }
 .schematic-context span { color:var(--text-muted); font-size:10px; }
@@ -34,7 +39,7 @@
 .schematic-keyboard summary { cursor:pointer; padding:8px 0; }
 .schematic-keyboard p { position:absolute; bottom:100%; right:0; width:250px; background:var(--surface-raised); border:1px solid var(--border-color); padding:12px; border-radius:6px; line-height:1.6; z-index:2; box-shadow:0 5px 18px #00000012; }
 .schematic-disclaimer { margin:12px 0 0; font-size:10px; line-height:1.5; color:var(--text-muted); }
-:root[data-theme="dark"] .protein-schematic { --schematic-back:#526b61; --schematic-middle:#769789; --schematic-front:#a2bdad; --schematic-linked:#b3dfc7; }
+:root[data-theme="dark"] .protein-schematic { --schematic-linked:#b3dfc7; }
 @media(max-width:650px) {
   .protein-schematic { padding:16px; grid-template-columns:minmax(0,1fr); }
   .schematic-canvas { height:300px; }
