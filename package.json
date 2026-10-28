@@ -6,7 +6,7 @@
   "scripts": {
     "data": "python3 scripts/process_data.py",
     "verify:data": "python3 scripts/verify_data.py",
-    "test": "python3 -m unittest discover -s tests -p 'test_*.py' && node --test tests/frontend.test.mjs tests/dataset-validation.test.mjs tests/explorer-state.test.mjs tests/chart-data.test.mjs tests/theme.test.mjs tests/map-data.test.mjs tests/filter-actions.test.mjs tests/schematic-geometry.test.mjs tests/variant-sort.test.mjs tests/rotation-drag.test.mjs",
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py' && node --test tests/frontend.test.mjs tests/dataset-validation.test.mjs tests/explorer-state.test.mjs tests/chart-data.test.mjs tests/theme.test.mjs tests/map-data.test.mjs tests/filter-actions.test.mjs tests/schematic-geometry.test.mjs tests/variant-sort.test.mjs tests/rotation-drag.test.mjs tests/protein-view.test.mjs",
     "build": "node scripts/build.mjs",
     "dev": "node scripts/serve.mjs",
     "preview": "node scripts/serve.mjs",

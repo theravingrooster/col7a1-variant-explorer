@@ -49,6 +49,40 @@ async function expectNoPageOverflow() {
   assert.ok(dimensions.page <= dimensions.viewport + 1,
     `Document overflows: ${JSON.stringify(dimensions)}`);
 }
+const proteinSchematic = () => page.getByRole("region", { name: "Collagen VII schematic", exact: true });
+const proteinCanvas = () => page.getByRole("group", { name: "Interactive 3D collagen VII schematic", exact: true });
+async function proteinView() {
+  return proteinCanvas().evaluate(canvas => ({
+    orientation: canvas.dataset.orientation.split(",").map(Number),
+    zoom: Number(canvas.dataset.zoom),
+    pan: canvas.dataset.pan.split(",").map(Number),
+  }));
+}
+async function proteinGeometry() {
+  return proteinCanvas().locator('.schematic-strand[data-schematic-highlight="false"]')
+    .evaluateAll(paths => paths.map(path => path.getAttribute("d")));
+}
+async function projectedRegionPoint(regionId) {
+  // A rotated curve's bounding-box center may be empty. Sample its actual stroke
+  // and verify that the topmost element at the projected point is this region.
+  const point = await proteinCanvas().evaluate((canvas, id) => {
+    const paths = [...canvas.querySelectorAll('.schematic-strand[data-schematic-highlight="false"]')]
+      .filter(path => path.dataset.schematicPathRegion === id && path.getAttribute("d"));
+    for (const path of paths.reverse()) {
+      const length = path.getTotalLength(), matrix = path.getScreenCTM();
+      if (!length || !matrix) continue;
+      for (const fraction of [.5, .25, .75, .1, .9]) {
+        const local = path.getPointAtLength(length * fraction);
+        const screen = new DOMPoint(local.x, local.y).matrixTransform(matrix);
+        const hit = document.elementFromPoint(screen.x, screen.y)?.closest("[data-schematic-path-region]");
+        if (hit?.dataset.schematicPathRegion === id) return { x: screen.x, y: screen.y };
+      }
+    }
+    return null;
+  }, regionId);
+  assert.ok(point, `A visible projected stroke must remain clickable for ${regionId}`);
+  return point;
+}
 function csvRows(text) {
   // Parse quoted CSV, including embedded commas/newlines and escaped quotes.
   const rows = [], row = [];
@@ -523,71 +557,166 @@ test("protein and residue views share hover, keyboard focus and selected-region 
   assert.match(await schematic.innerText(), /not a resolved structure/);
 });
 
-test("schematic rotation can be paused and adjusted and respects reduced motion", async () => {
-  const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
-  await schematic.scrollIntoViewIfNeeded();
-  await search().focus();
-  await page.mouse.move(0, 0);
-  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.rotating === "true");
-  await schematic.getByRole("button", { name: "Pause protein rotation", exact: true }).click();
-  assert.equal(await schematic.getAttribute("data-rotating"), "false");
-  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
-  const angle = schematic.getByRole("slider", { name: "Protein rotation angle", exact: true });
-  await angle.focus();
-  await angle.press("Home");
-  assert.equal(await angle.inputValue(), "0");
-  const pathsBefore = await schematic.locator('[data-schematic-highlight="false"]').evaluateAll(paths => paths.map(path => path.getAttribute("d")));
-  await angle.press("ArrowRight");
-  assert.equal(await angle.inputValue(), "1");
-  const pathsAfter = await schematic.locator('[data-schematic-highlight="false"]').evaluateAll(paths => paths.map(path => path.getAttribute("d")));
-  assert.notDeepEqual(pathsAfter, pathsBefore, "Manual rotation changes the drawn geometry");
-  assert.equal(await schematic.getAttribute("data-rotating"), "false");
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.reload({ waitUntil: "networkidle" });
-  await expectCount(source.summary.variants);
-  await schematic.scrollIntoViewIfNeeded();
-  await page.mouse.move(0, 0);
-  assert.equal(await schematic.getAttribute("data-rotating"), "false");
-  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
-  await angle.focus();
-  await angle.press("Home");
-  await angle.press("ArrowRight");
-  assert.equal(await angle.inputValue(), "1", "Manual rotation remains available with reduced motion");
-  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+test("3D protein controls support keyboard rotation, pan, zoom and reset without changing filters", async () => {
+  const schematic = proteinSchematic(), canvas = proteinCanvas();
+  const nc2 = source.protein.domains.find(domain => domain.label === "NC2");
+  await schematic.getByRole("button", { name: "Select NC2 on protein schematic", exact: true }).click();
+  await expectCount(source.variants.filter(variant => variant.proteinMapping.domainIds.includes(nc2.id)).length);
+  const filteredURL = page.url(), initial = await proteinView();
+  assert.equal(await canvas.getAttribute("tabindex"), "0");
+  assert.equal(await schematic.getAttribute("data-rotating"), "false", "The model starts stationary");
+  await canvas.focus();
+  for (const key of ["ArrowRight", "ArrowUp", "ArrowDown", "ArrowLeft"]) {
+    const before = await proteinView(), geometry = await proteinGeometry();
+    await canvas.press(key);
+    assert.notDeepEqual((await proteinView()).orientation, before.orientation, `${key} changes 3D orientation`);
+    assert.notDeepEqual(await proteinGeometry(), geometry, `${key} changes projected geometry`);
+  }
+  const beforePan = await proteinView();
+  await canvas.press("Shift+ArrowRight");
+  assert.notDeepEqual((await proteinView()).pan, beforePan.pan, "Shift plus arrows pans the model");
+  const beforeZoom = await proteinView();
+  await canvas.press("Shift+Equal");
+  assert.ok((await proteinView()).zoom > beforeZoom.zoom, "Plus zooms in");
+  const zoomedIn = (await proteinView()).zoom;
+  await canvas.press("-");
+  assert.ok((await proteinView()).zoom < zoomedIn, "Minus zooms out");
+  await canvas.press("Home");
+  assert.deepEqual(await proteinView(), initial, "Home restores the original view");
+  assert.equal(page.url(), filteredURL, "Camera controls preserve the selected research cohort");
+  assert.equal(await filterControl("Protein domain").inputValue(), nc2.id);
 });
 
-test("dragging the protein rotates it without filtering and releases safely outside the canvas", async () => {
-  const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
-  const canvas = schematic.locator(".schematic-canvas");
+test("automatic protein rotation is optional and a new reduced-motion preference pauses it", async () => {
+  const schematic = proteinSchematic(), canvas = proteinCanvas();
+  await schematic.scrollIntoViewIfNeeded();
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  const initial = await proteinView();
+  await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).click();
+  await page.mouse.move(0, 0);
+  // Moving focus to an external existing control lets requested animation resume.
+  await page.getByRole("button", { name: "Switch to dark mode", exact: true }).focus();
+  await schematic.scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.rotating === "true");
+  await page.waitForFunction(before => document.querySelector(".schematic-canvas")?.dataset.orientation
+    .split(",").some((value, index) => Math.abs(Number(value) - before[index]) > .00001), initial.orientation);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.rotating === "false");
+  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
+  const reduced = await proteinView();
+  await canvas.focus();
+  await canvas.press("ArrowUp");
+  assert.notDeepEqual((await proteinView()).orientation, reduced.orientation, "Manual 3D rotation remains available with reduced motion");
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  await page.reload({ waitUntil: "networkidle" });
+  await expectCount(source.summary.variants);
+  assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
+});
+
+test("horizontal, vertical and diagonal protein drags rotate geometry without filtering and preserve projected hit targets", async () => {
+  const schematic = proteinSchematic(), canvas = proteinCanvas();
   const nc1 = source.protein.domains.find(domain => domain.label === "NC1");
-  const region = schematic.getByRole("button", { name: "Select NC1 on protein schematic", exact: true });
-  await canvas.scrollIntoViewIfNeeded();
-  const target = await region.locator(".schematic-hit-area").boundingBox();
-  const bounds = await canvas.boundingBox();
-  const startX = target.x + target.width / 2, startY = target.y + target.height / 2;
-  await page.mouse.move(startX, startY);
-  const initialAngle = Number(await canvas.getAttribute("data-angle"));
+  const nc2 = source.protein.domains.find(domain => domain.label === "NC2");
   const initialURL = page.url();
+  await canvas.scrollIntoViewIfNeeded();
+  for (const [dx, dy] of [[70, 0], [0, -60], [0, 60], [65, 45]]) {
+    await schematic.getByRole("button", { name: "Reset protein view", exact: true }).click();
+    const point = await projectedRegionPoint(nc1.id);
+    const before = await proteinView(), geometry = await proteinGeometry();
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down();
+    await page.mouse.move(point.x + dx, point.y + dy, { steps: 8 });
+    await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "true");
+    assert.notDeepEqual((await proteinView()).orientation, before.orientation, `Drag ${dx},${dy} changes orientation`);
+    assert.notDeepEqual(await proteinGeometry(), geometry, `Drag ${dx},${dy} changes projected geometry`);
+    await page.mouse.up();
+    await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "false");
+    assert.equal(page.url(), initialURL, "Dragging a domain must not filter it on release");
+    assert.equal(await schematic.getAttribute("data-rotating"), "false");
+  }
+  const bounds = await canvas.boundingBox();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.mouse.down();
-  await page.mouse.move(startX + 70, startY, { steps: 8 });
-  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "true");
-  assert.notEqual(Number(await canvas.getAttribute("data-angle")), initialAngle, "Dragging must alter the drawn rotation angle");
-  await page.mouse.move(Math.min(1430, bounds.x + bounds.width + 12), startY, { steps: 8 });
+  await page.mouse.move(Math.min(1430, bounds.x + bounds.width + 12), bounds.y + bounds.height / 2, { steps: 8 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "false");
-  assert.equal(await schematic.getAttribute("data-rotating"), "false", "Manual drag leaves automatic rotation paused");
-  assert.equal(page.url(), initialURL, "A drag beginning on a region must not also filter it");
+  assert.equal(page.url(), initialURL, "Releasing outside the canvas leaves no stuck gesture or accidental filter");
   await expectCount(source.summary.variants);
-  assert.equal(await filterControl("Protein domain").inputValue(), "");
-  await region.click();
-  await expectCount(source.variants.filter(variant => variant.proteinMapping.domainIds.includes(nc1.id)).length);
-  assert.equal(await filterControl("Protein domain").inputValue(), nc1.id, "The next ordinary click must still select the region");
+  const projected = await projectedRegionPoint(nc2.id);
+  await page.mouse.click(projected.x, projected.y);
+  await expectCount(source.variants.filter(variant => variant.proteinMapping.domainIds.includes(nc2.id)).length);
+  assert.equal(await filterControl("Protein domain").inputValue(), nc2.id, "The rotated visible stroke still selects its own domain");
+  const region = schematic.getByRole("button", { name: "Select NC2 on protein schematic", exact: true });
   await region.press("Enter");
   await expectCount(source.summary.variants);
-  const slider = schematic.getByRole("slider", { name: "Protein rotation angle", exact: true });
-  await slider.press("Home");
-  await slider.press("ArrowRight");
-  assert.equal(await slider.inputValue(), "1", "Keyboard rotation remains available after dragging");
+  assert.equal(await region.getAttribute("aria-pressed"), "false");
+  await region.click();
+  await expectCount(source.variants.filter(variant => variant.proteinMapping.domainIds.includes(nc2.id)).length);
+  assert.equal(await region.getAttribute("aria-pressed"), "true", "The accessible domain button also works after dragging");
+});
+
+test("wheel, zoom buttons and Ctrl/right-button pan change only the protein view and reset preserves filters", async () => {
+  const schematic = proteinSchematic(), canvas = proteinCanvas();
+  await query("id:17423", 1);
+  const filteredURL = page.url(), initial = await proteinView();
+  await canvas.scrollIntoViewIfNeeded();
+  const bounds = await canvas.boundingBox();
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+  await page.mouse.move(point.x, point.y);
+  await page.mouse.wheel(0, -150);
+  await page.waitForFunction(zoom => Number(document.querySelector(".schematic-canvas")?.dataset.zoom) > zoom, initial.zoom);
+  const wheelZoom = (await proteinView()).zoom;
+  await schematic.getByRole("button", { name: "Zoom out of protein", exact: true }).click();
+  assert.ok((await proteinView()).zoom < wheelZoom);
+  const zoomedOut = (await proteinView()).zoom;
+  await schematic.getByRole("button", { name: "Zoom in on protein", exact: true }).click();
+  assert.ok((await proteinView()).zoom > zoomedOut);
+  for (const button of ["left", "right"]) {
+    const before = await proteinView(), geometry = await proteinGeometry();
+    if (button === "left") await page.keyboard.down("Control");
+    await page.mouse.move(point.x, point.y);
+    await page.mouse.down({ button });
+    await page.mouse.move(point.x + 55, point.y + 35, { steps: 8 });
+    await page.mouse.up({ button });
+    if (button === "left") await page.keyboard.up("Control");
+    const after = await proteinView();
+    assert.notDeepEqual(after.pan, before.pan, `${button === "left" ? "Ctrl" : "Right-button"} drag pans`);
+    assert.deepEqual(after.orientation, before.orientation, "Panning does not rotate the model");
+    assert.notDeepEqual(await proteinGeometry(), geometry, "Pan changes projected coordinates");
+    assert.equal(await schematic.getAttribute("data-dragging"), "false");
+  }
+  assert.equal(page.url(), filteredURL);
+  await schematic.getByRole("button", { name: "Reset protein view", exact: true }).click();
+  assert.deepEqual(await proteinView(), initial);
+  assert.equal(page.url(), filteredURL, "Resetting camera does not reset research filters");
+  assert.equal(await search().inputValue(), "id:17423");
+  await expectCount(1);
+});
+
+test("a one-finger vertical touch rotates the protein without scrolling or selecting a domain", async () => {
+  const schematic = proteinSchematic(), canvas = proteinCanvas();
+  await canvas.scrollIntoViewIfNeeded();
+  assert.equal(await canvas.evaluate(node => getComputedStyle(node).touchAction), "none");
+  const bounds = await canvas.boundingBox();
+  const x = bounds.x + bounds.width / 2, y = bounds.y + bounds.height / 2;
+  const before = await proteinView(), geometry = await proteinGeometry(), initialURL = page.url();
+  const pageScroll = await page.evaluate(() => window.scrollY);
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y, id: 1 }] });
+    for (const dy of [10, 25, 45, 60]) {
+      await session.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + dy, id: 1 }] });
+    }
+    await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "true");
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } finally { await session.detach(); }
+  await page.waitForFunction(() => document.querySelector(".protein-schematic")?.dataset.dragging === "false");
+  assert.notDeepEqual((await proteinView()).orientation, before.orientation);
+  assert.notDeepEqual(await proteinGeometry(), geometry);
+  assert.equal(await page.evaluate(() => window.scrollY), pageScroll, "The canvas owns touch rotation; page scrolling remains outside it");
+  assert.equal(page.url(), initialURL);
+  await expectCount(source.summary.variants);
 });
 
 test("the consensus preset uses exact review status and keeps graphs and evidence in sync", async () => {
