@@ -1,0 +1,177 @@
+export const GROUPS = {
+  pathogenic: {
+    label: "Pathogenic / likely pathogenic",
+    short: "Pathogenic",
+    color: "#b8503e",
+  },
+  uncertain: {
+    label: "Uncertain significance",
+    short: "Uncertain",
+    color: "#b78a30",
+  },
+  conflicting: {
+    label: "Conflicting classifications",
+    short: "Conflicting",
+    color: "#8565a3",
+  },
+  benign: {
+    label: "Benign / likely benign",
+    short: "Benign",
+    color: "#458985",
+  },
+  other: { label: "Other / not classified", short: "Other", color: "#88929b" },
+};
+export const EMPTY_FILTERS = {
+  query: "",
+  significance: "",
+  review: "",
+  domain: "",
+  mapping: "",
+  type: "",
+  range: null,
+};
+export const formatNumber = (n) => new Intl.NumberFormat("en-US").format(n);
+export const humanReason = (s) => (s || "").replaceAll("_", " ");
+export const positionLabel = (m) =>
+  m.status !== "mapped"
+    ? "Not mapped"
+    : m.start === m.end
+      ? `aa ${m.start}`
+      : `aa ${m.start}–${m.end}`;
+export function searchableText(v) {
+  return [
+    v.variationId,
+    ...v.alleleIds,
+    ...v.names,
+    ...v.geneSymbols,
+    ...v.conditions,
+    ...v.conditionIdentifiers,
+    ...v.rcvAccessions,
+    ...v.clinicalSignificance,
+    ...v.reviewStatus,
+    ...v.genomicPositions.flatMap((p) => [
+      p.assembly,
+      p.chromosomeAccession,
+      p.start,
+      p.end,
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+export function filterVariants(variants, filters) {
+  const terms = filters.query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  return variants.filter((v) => {
+    const m = v.proteinMapping;
+    return (
+      (!terms.length ||
+        terms.every((t) => (v.searchText ?? searchableText(v)).includes(t))) &&
+      (!filters.significance ||
+        v.clinicalSignificance.includes(filters.significance)) &&
+      (!filters.review || v.reviewStatus.includes(filters.review)) &&
+      (!filters.domain || m.domainIds.includes(filters.domain)) &&
+      (!filters.mapping || m.status === filters.mapping) &&
+      (!filters.type || v.types.includes(filters.type)) &&
+      (!filters.range ||
+        (m.status === "mapped" &&
+          m.start <= filters.range[1] &&
+          m.end >= filters.range[0]))
+    );
+  });
+}
+export function sortVariants(variants, sort) {
+  return [...variants].sort((a, b) => {
+    if (sort === "position")
+      return (
+        (a.proteinMapping.start ?? Infinity) -
+          (b.proteinMapping.start ?? Infinity) || a.variationId - b.variationId
+      );
+    if (sort === "id-desc") return b.variationId - a.variationId;
+    return a.variationId - b.variationId;
+  });
+}
+export function histogram(variants, length, binSize = 25) {
+  const bins = Array.from({ length: Math.ceil(length / binSize) }, (_, i) => ({
+    start: i * binSize + 1,
+    end: Math.min((i + 1) * binSize, length),
+    total: 0,
+    counts: Object.fromEntries(Object.keys(GROUPS).map((g) => [g, 0])),
+  }));
+  for (const v of variants) {
+    if (v.proteinMapping.status !== "mapped") continue;
+    // Each variation contributes once, at the first reported residue of its span.
+    const bin = bins[Math.floor((v.proteinMapping.start - 1) / binSize)];
+    if (bin) {
+      bin.total++;
+      bin.counts[v.significanceGroup]++;
+    }
+  }
+  return bins;
+}
+export function csvCell(value) {
+  let text = value == null ? "" : String(value);
+  // Prevent spreadsheet formula evaluation when opening exported source text.
+  if (/^[\s\u0000-\u001f]*[=+@-]/.test(text)) text = "'" + text;
+  return `"${text.replaceAll('"', '""')}"`;
+}
+export function variantsCsv(variants, domains) {
+  const labels = new Map(domains.map((d) => [d.id, d.label]));
+  const header = [
+    "Variation ID",
+    "Allele IDs",
+    "Gene symbols",
+    "ClinVar name",
+    "Coding HGVS",
+    "Protein HGVS",
+    "Clinical significance",
+    "Review status",
+    "Conditions (as reported)",
+    "Condition identifiers",
+    "Variant type",
+    "Protein mapping status",
+    "Unmapped reason",
+    "Protein start (1-based)",
+    "Protein end (inclusive)",
+    "Mapping extent",
+    "Domains",
+    "Genomic positions",
+    "Last evaluated",
+    "ClinVar URL",
+    "Source lines",
+    "Source row SHA256",
+  ];
+  const rows = variants.map((v) => [
+    v.variationId,
+    v.alleleIds.join("; "),
+    v.geneSymbols.join("; "),
+    v.names.join("; "),
+    v.codingHgvs.join("; "),
+    v.proteinHgvs.join("; "),
+    v.clinicalSignificance.join("; "),
+    v.reviewStatus.join("; "),
+    v.conditions.join("; "),
+    v.conditionIdentifiers.join("; "),
+    v.types.join("; "),
+    v.proteinMapping.status,
+    v.proteinMapping.reason,
+    v.proteinMapping.start,
+    v.proteinMapping.end,
+    v.proteinMapping.extent,
+    v.proteinMapping.domainIds.map((id) => labels.get(id)).join("; "),
+    v.genomicPositions
+      .map(
+        (p) =>
+          `${p.assembly || "unspecified"} ${p.chromosomeAccession || p.chromosome || ""}:${p.start ?? "?"}-${p.end ?? "?"}`,
+      )
+      .join("; "),
+    v.lastEvaluated.join("; "),
+    v.url,
+    v.sourceRecords.map((s) => s.line).join("; "),
+    v.sourceRecords.map((s) => s.sha256).join("; "),
+  ]);
+  return (
+    "\uFEFF" +
+    [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n") +
+    "\r\n"
+  );
+}

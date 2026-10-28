@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.cache/
+__pycache__/
+*.pyc
+.DS_Store
+variant_summary.txt
+variant_summary.txt.gz
+.vercel/
+.env
+.env.*

@@ -1,0 +1,24 @@
+{
+  "name": "col7a1-variant-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data": "python3 scripts/process_data.py",
+    "verify:data": "python3 scripts/verify_data.py",
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py' && node --test tests/*.test.mjs",
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/serve.mjs",
+    "preview": "node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
