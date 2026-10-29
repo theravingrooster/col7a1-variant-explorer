@@ -58,18 +58,32 @@ function WebGLCanvas({ suppliedCanvas, onWebGLUnavailable, coordinateText, fragm
     callbacks.current.onStatus?.("error");
     callbacks.current.onError?.(error instanceof Error ? error.message : String(error));
   }
+  function atomDetails(atom) {
+    const loaded = loadedRef.current;
+    return loaded && loaded.fragment.id === current.current.fragment.id && loaded.text === current.current.coordinateText
+      ? fragmentAtomDetails(loaded.fragment, atom) : null;
+  }
   function renderStyle() {
     const viewer = engineRef.current, state = current.current;
     if (!viewer || !loadedRef.current || loadedRef.current.fragment.id !== state.fragment.id || loadedRef.current.text !== state.coordinateText) return;
     const key = `${state.fragment.id}:${state.representation}:${state.colorMode}`;
     const changed = key !== styleKey.current;
+    const pickSelection = state.representation === "sticks" ? {} : { atom: "CA" };
+    if (changed) {
+      viewer.setHoverable({}, false);
+      viewer.setClickable({}, false);
+      viewer.setHoverable(pickSelection, true, atom => callbacks.current.onResidueHover?.(atomDetails(atom)), () => callbacks.current.onResidueHover?.(null));
+      viewer.setClickable(pickSelection, true, atom => { const residue = atomDetails(atom); if (residue) callbacks.current.onResidueSelect?.(residue); });
+      clearTimeout(viewer.hoverTimeout);
+      viewer.current_hover = null;
+    }
     const atomColor = state.colorMode === "chain"
       ? atom => CHAIN_COLORS[state.fragment.chains.indexOf(atom.chain) % CHAIN_COLORS.length] || "#9a9a9a"
       : atom => confidenceColor(atom.b);
     const backbone = { cartoon: { colorfunc: atomColor, thickness: .22, width: 1.1, arrows: true } };
     viewer.setStyle({}, state.representation === "sticks" ? { stick: { colorfunc: atomColor, radius: .12 } } : backbone);
-    // Invisible C-alpha pick spheres make thin backbones easy to inspect.
-    viewer.addStyle({ atom: "CA" }, { clicksphere: { radius: 1.15 } });
+    // Atom views pick every displayed atom; thin backbones use C-alpha targets.
+    viewer.addStyle(pickSelection, { clicksphere: { radius: state.representation === "sticks" ? .45 : 1.15 } });
     const selection = fragmentSelection(state.fragment, state.activeRange);
     if (selection) {
       const size = Math.min(state.fragment.end, state.activeRange[1]) - Math.max(state.fragment.start, state.activeRange[0]) + 1;
@@ -120,13 +134,6 @@ function WebGLCanvas({ suppliedCanvas, onWebGLUnavailable, coordinateText, fragm
     }
     loadedRef.current = { text: state.coordinateText, fragment: state.fragment };
     viewer.setHoverDuration(80);
-    const details = atom => {
-      const loaded = loadedRef.current;
-      return loaded && loaded.fragment.id === current.current.fragment.id && loaded.text === current.current.coordinateText
-        ? fragmentAtomDetails(loaded.fragment, atom) : null;
-    };
-    viewer.setHoverable({ atom: "CA" }, true, atom => callbacks.current.onResidueHover?.(details(atom)), () => callbacks.current.onResidueHover?.(null));
-    viewer.setClickable({ atom: "CA" }, true, atom => { const residue = details(atom); if (residue) callbacks.current.onResidueSelect?.(residue); });
     renderStyle();
     if (defaultView.current) viewer.setView(defaultView.current.slice());
     viewer.zoomTo();

@@ -41,9 +41,10 @@ export default function CoordinateCanvas({ coordinateText, fragment, representat
       });
     }
     const selected = state.activeRange;
-    pickCache.current = model.alpha.map(index => ({ ...points[index], index }));
+    const alphaPoints = model.alpha.map(index => ({ ...points[index], index }));
+    pickCache.current = state.representation === "sticks" ? points.map((point, index) => ({ ...point, index })) : alphaPoints;
     if (selected) {
-      for (const point of [...pickCache.current].sort((a, b) => a.z - b.z)) {
+      for (const point of [...alphaPoints].sort((a, b) => a.z - b.z)) {
         const position = state.fragment.start + model.atoms[point.index].resi - 1;
         if (position < selected[0] || position > selected[1]) continue;
         context.fillStyle = SELECTED_RESIDUE_COLOR; context.beginPath(); context.arc(point.x, point.y, selected[1] - selected[0] < 12 ? 5 : 2.7, 0, Math.PI * 2); context.fill();
