@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createViewer, setSyncSurface, SurfaceType } from "3dmol/build/3Dmol.es6-min.js";
 import { CHAIN_COLORS, SELECTED_RESIDUE_COLOR, confidenceColor, fragmentAtomDetails, fragmentSelection } from "./fragment-rendering.mjs";
+import CoordinateCanvas from "./CoordinateCanvas.jsx";
 
 // Surfaces are generated locally, only on request; no worker/blob CSP exception.
 setSyncSurface(true);
 
-function managedViewer(element) {
+function managedViewer(element, canvas) {
   // 3Dmol 2.5.5 has no disposal API. Retain its three global listener references
   // during the synchronous constructor so unmount can remove them. The native
   // methods are restored before any React callbacks or asynchronous work run.
@@ -22,7 +23,9 @@ function managedViewer(element) {
   let viewer;
   const detach = () => listeners.forEach(([target, type, handler, options]) => target.removeEventListener(type, handler, options));
   try {
-    viewer = createViewer(element, { antialias: true, backgroundAlpha: 0, orthographic: true });
+    // A one-cell viewport keeps 3Dmol on this tested canvas. Its shared offscreen
+    // path expects a bitmaprenderer canvas, which cannot reuse a WebGL context.
+    viewer = createViewer(element, { canvas, row: 0, col: 0, rows: 1, cols: 1, antialias: true, backgroundAlpha: 0, orthographic: true });
   } catch (error) {
     detach();
     throw error;
@@ -39,17 +42,17 @@ function managedViewer(element) {
     // These observer fields are pinned-version adapter details, not app state.
     viewer.divwatcher?.disconnect();
     viewer.intwatcher?.disconnect();
-    viewer.clear();
-    element.replaceChildren();
+    try { viewer.clear(); } catch { /* A lost context may already have released GPU geometry. */ }
+    finally { element.replaceChildren(); }
   } };
 }
 
-export default function FragmentCanvas({ coordinateText, fragment, representation = "backbone", colorMode = "confidence", activeRange = null, onResidueHover, onResidueSelect, onReady, onError, onStatus }) {
+function WebGLCanvas({ suppliedCanvas, onWebGLUnavailable, coordinateText, fragment, representation = "backbone", colorMode = "confidence", activeRange = null, onResidueHover, onResidueSelect, onReady, onError, onStatus }) {
   const hostRef = useRef(null), engineRef = useRef(null), managedRef = useRef(null);
   const current = useRef(null), callbacks = useRef(null), loadedRef = useRef(null), firstView = useRef(null), defaultView = useRef(null);
   const frameRef = useRef(null), surfaceRevision = useRef(0), styleKey = useRef("");
   current.current = { coordinateText, fragment, representation, colorMode, activeRange };
-  callbacks.current = { onResidueHover, onResidueSelect, onReady, onError, onStatus };
+  callbacks.current = { onResidueHover, onResidueSelect, onReady, onError, onStatus, onWebGLUnavailable };
 
   function notifyError(error) {
     callbacks.current.onStatus?.("error");
@@ -148,12 +151,18 @@ export default function FragmentCanvas({ coordinateText, fragment, representatio
   }
   useEffect(() => {
     const host = hostRef.current;
-    let alive = true;
+    let alive = true, failedInitialization = false;
     function initializeOrResize() {
-      if (!alive || !host.clientWidth || !host.clientHeight) return;
+      if (!alive || failedInitialization || !host.clientWidth || !host.clientHeight) return;
       try {
         if (!engineRef.current) {
-          managedRef.current = managedViewer(host);
+          try { managedRef.current = managedViewer(host, suppliedCanvas); }
+          catch {
+            failedInitialization = true;
+            host.replaceChildren();
+            callbacks.current.onWebGLUnavailable?.();
+            return;
+          }
           engineRef.current = managedRef.current.viewer;
           defaultView.current = engineRef.current.getView().slice();
           engineRef.current.setViewChangeCallback(() => {
@@ -213,6 +222,42 @@ export default function FragmentCanvas({ coordinateText, fragment, representatio
     callbacks.current.onResidueHover?.(null);
   }
   return <div ref={hostRef} className="fragment-canvas" role="group" tabIndex={0}
+    data-renderer="webgl"
     aria-label={`Interactive AlphaFold fragment: ${fragment.label}, residues ${fragment.start} to ${fragment.end}. Arrow keys rotate, Shift and arrows pan, plus and minus zoom, Home resets.`}
     onKeyDown={keyboard} onPointerLeave={leavePointer} />;
+}
+
+export default function FragmentCanvas(props) {
+  const [renderer, setRenderer] = useState(null);
+  const rendererChange = useRef(props.onRendererChange);
+  rendererChange.current = props.onRendererChange;
+
+  useEffect(() => {
+    const canvas = document.createElement("canvas");
+    let context = null;
+    try {
+      // Reuse this very canvas in 3Dmol; probing never consumes a second context.
+      const options = { alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false };
+      context = canvas.getContext("webgl2", options) || canvas.getContext("webgl", options) || canvas.getContext("experimental-webgl", options);
+    } catch { /* Some browsers disable WebGL even though Canvas2D is available. */ }
+    if (!context || context.isContextLost()) {
+      setRenderer({ mode: "compatibility" });
+      return;
+    }
+    function contextLost(event) {
+      // Stop 3Dmol's automatic context retry. The coordinate fallback remains
+      // interactive without depending on GPU availability or browser settings.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setRenderer({ mode: "compatibility" });
+    }
+    canvas.addEventListener("webglcontextlost", contextLost, true);
+    setRenderer({ mode: "webgl", canvas });
+    return () => canvas.removeEventListener("webglcontextlost", contextLost, true);
+  }, []);
+  useEffect(() => { if (renderer) rendererChange.current?.(renderer.mode); }, [renderer?.mode]);
+
+  if (!renderer) return <p className="fragment-loading" role="status">Preparing coordinate viewer…</p>;
+  if (renderer.mode === "compatibility") return <CoordinateCanvas {...props} representation={props.representation === "surface" ? "backbone" : props.representation} />;
+  return <WebGLCanvas {...props} suppliedCanvas={renderer.canvas} onWebGLUnavailable={() => setRenderer({ mode: "compatibility" })} />;
 }

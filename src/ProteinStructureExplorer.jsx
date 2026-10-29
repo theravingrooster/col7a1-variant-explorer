@@ -32,6 +32,7 @@ export default function ProteinStructureExplorer({ protein, variants, activeRang
   const [positionError, setPositionError] = useState("");
   const [canvasError, setCanvasError] = useState("");
   const [ready, setReady] = useState(false);
+  const [renderer, setRenderer] = useState("");
   const controls = useRef(null);
   const onRegionHoverRef = useRef(onRegionHover);
   onRegionHoverRef.current = onRegionHover;
@@ -88,7 +89,7 @@ export default function ProteinStructureExplorer({ protein, variants, activeRang
       <button type="button" aria-pressed={view === "overview"} onClick={() => selectView("overview")}>Whole-protein overview</button>
     </div>
     <div hidden={view !== "fragments"} className="fragment-workspace">
-      <div className="fragment-heading"><div><p className="eyebrow">PREDICTED STRUCTURE · FRAGMENT ONLY</p><h3>Explore one piece at a time</h3></div><span className="fragment-method">AlphaFold 3</span></div>
+      <div className="fragment-heading"><h3>AlphaFold fragment structures</h3><span className="fragment-method">Predicted · fragment only</span></div>
       <div className="fragment-choices" role="group" aria-label="Choose a predicted fragment">
         {manifest.fragments.map(item => <button key={item.id} type="button" aria-pressed={fragment.id === item.id} onClick={() => setFragmentId(item.id)}>
           <strong>{item.label}</strong><span>aa {number(item.start)}–{number(item.end)} · {item.chains.length} {item.chains.length === 1 ? "chain" : "chains"}</span>
@@ -97,19 +98,21 @@ export default function ProteinStructureExplorer({ protein, variants, activeRang
       <p className="fragment-coverage-label"><strong>{number(fragment.length)} of {number(protein.length)} sequence positions</strong> · {fragment.chains.length === 1 ? "One isolated chain" : "Three copies of the same fragment"}. Fragments are displayed separately and are not joined.</p>
       <div className="fragment-coverage" role="img" aria-label={`Modeled coverage: residues ${fragment.start} through ${fragment.end} of ${protein.length}`}><span style={{ left: `${(fragment.start - 1) / protein.length * 100}%`, width: `${fragment.length / protein.length * 100}%` }} /></div>
       <div className="fragment-toolbar">
-        <label>Display<select aria-label="Structure representation" value={representation} onChange={event => setRepresentation(event.target.value)}><option value="backbone">Thin backbone</option><option value="sticks">Atoms & bonds</option><option value="surface">Molecular surface</option></select></label>
+        <label>Display<select aria-label="Structure representation" value={representation} onChange={event => setRepresentation(event.target.value)}><option value="backbone">Thin backbone</option><option value="sticks">Atoms & bonds</option><option value="surface" disabled={renderer === "compatibility"}>Molecular surface{renderer === "compatibility" ? " (needs WebGL)" : ""}</option></select></label>
         <label>Color<select aria-label="Structure coloring" value={colorMode} onChange={event => setColorMode(event.target.value)}><option value="confidence">Prediction confidence</option><option value="chain">Chain</option></select></label>
         <div className="fragment-view-buttons"><button type="button" disabled={!ready} aria-label="Zoom out of fragment" onClick={() => controls.current?.zoom(1 / 1.25)}>−</button><button type="button" disabled={!ready} aria-label="Zoom in on fragment" onClick={() => controls.current?.zoom(1.25)}>+</button><button type="button" disabled={!ready} onClick={() => controls.current?.reset()}>Reset structure view</button></div>
       </div>
       <div className="fragment-stage" data-fragment={fragment.id} data-model-status={error ? "error" : ready ? "ready" : "loading"}>
         <CanvasBoundary><Suspense fallback={<p className="fragment-loading" role="status">Loading molecular viewer…</p>}>
           <FragmentCanvas coordinateText={loadedText} fragment={fragment} representation={representation} colorMode={colorMode} activeRange={linkedRange}
+            onRendererChange={next => { setRenderer(next); setCanvasError(""); if (next === "compatibility") setRepresentation(mode => mode === "surface" ? "backbone" : mode); }}
             onResidueHover={hoverResidue} onResidueSelect={selectResidue} onReady={api => { controls.current = api; setReady(Boolean(api)); }} onError={message => { setCanvasError(message); setReady(false); }} />
         </Suspense></CanvasBoundary>
         {!loadedText && !error && <p className="fragment-loading" role="status">Loading fragment coordinates…</p>}
         {error && <div className="fragment-error" role="alert"><p>{error}</p>{canvasError ? <button type="button" className="text-button" onClick={() => location.reload()}>Reload viewer</button> : <button type="button" className="text-button" onClick={() => setRetry(value => value + 1)}>Retry coordinates</button>}<span> The overview and variant table remain available.</span></div>}
       </div>
       <p className="fragment-interaction-hint">Drag to rotate · scroll to zoom · right-drag to pan · click a residue to filter variants. Keyboard: arrows rotate, + / − zoom, Home resets.</p>
+      {renderer === "compatibility" && <p className="fragment-compatibility-note">Compatibility view: the same predicted coordinates, rendered without WebGL. Surface display requires WebGL.</p>}
       <div className="fragment-color-key" aria-label={colorMode === "confidence" ? "AlphaFold pLDDT confidence legend" : "Protein chain color legend"}>
         {colorMode === "confidence" ? <><span>pLDDT</span>{[["Very high ≥90", "#0053d6"], ["Confident 70–90", "#65cbf3"], ["Low 50–70", "#ffdb13"], ["Very low <50", "#ff7d45"]].map(([label, color]) => <span key={label}><i style={{ background: color }} />{label}</span>)}</> : fragment.chains.map((chain, i) => <span key={chain}><i style={{ background: CHAIN_COLORS[i % CHAIN_COLORS.length] }} />Chain {chain}</span>)}
         <span><i style={{ background: SELECTED_RESIDUE_COLOR }} />Selected residues</span>

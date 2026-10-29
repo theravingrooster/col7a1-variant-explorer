@@ -102,7 +102,7 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 162 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage, protein-reference provenance and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 165 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage, protein-reference provenance and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
@@ -153,7 +153,7 @@ Every click and hover maps model residue 1 back to the fragment's canonical star
 
 Original mmCIF, job inputs and summary-confidence files are downloadable. `public/data/structures/manifest.json` records reference identity, file hashes, chains, confidence, residue mappings, original archive filenames and model provenance. Preparation can be reproduced with `scripts/prepare_structures.py`; its README documents original archives and output terms. AlphaFold Server output is subject to its non-commercial terms, with original notices preserved. 3Dmol.js 2.5.5 is BSD-3-Clause licensed and appears in the generated third-party licenses file. Structure coordinates and renderer assets are served locally; no new API or hosted data service is used.
 
-Scientific regression tests check complete per-chain atom/residue coverage, exact canonical sequence identity, source hashes, reported confidence and separation of fragment/domain boundaries. The build validates the manifest and download hashes before creating assets. Surface generation is on-demand and local; no CSP relaxations were introduced.
+Scientific regression tests check complete per-chain atom/residue coverage, exact canonical sequence identity, source hashes, reported confidence and separation of fragment/domain boundaries. The build validates the manifest and download hashes before creating assets. Surface generation is on-demand and local; no CSP relaxations were introduced. Browsers without WebGL automatically use a Canvas2D compatibility renderer of the same original coordinates, with rotation, zoom, residue picking, Cα backbone traces and atom/bond views. The surface option is disabled there. Switching renderers never changes residue mappings or source coordinates.
 
 ## Coordinated exploration and shareable evidence
 
