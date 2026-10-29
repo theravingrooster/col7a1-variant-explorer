@@ -1,6 +1,6 @@
 # COL7A1 variant explorer
 
-A static React research explorer built entirely from the supplied local ClinVar and UniProt files. No API, database, remote fonts, analytics, or runtime data requests to external services. ClinVar and UniProt links open only when clicked.
+A static React research explorer built from supplied local ClinVar and UniProt files, with two independently predicted AlphaFold 3 fragments for structural exploration. No API, database, remote fonts, analytics, or runtime data requests to external services. ClinVar and UniProt links open only when clicked.
 
 - Live site: [col7a1-variant-explorer.vercel.app](https://col7a1-variant-explorer.vercel.app)
 - Repository: [theravingrooster/col7a1-variant-explorer](https://github.com/theravingrooster/col7a1-variant-explorer)
@@ -102,7 +102,7 @@ Implementation: `scripts/process_data.py` (data), `scripts/verify_data.py` (sour
 
 ## Verification after changes
 
-`npm test` runs 151 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage, protein-reference provenance and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
+`npm test` runs 162 unit and regression tests, including sorting, pointer gestures, 3D projection, schematic linkage, protein-reference provenance and geometry checks. `npm run verify:snapshot` reproduces all 6,522 variants from the 13,036 committed TSV rows, checks row and file hashes, verifies UniProt/domain data and summary counts, and works without the original archive. It **cannot prove completeness against the original ClinVar archive or freshness**. `npm run verify:data` retains that independent full-source check and now reports clearly when the archive is missing.
 
 The build and browser share dataset validation, so malformed nested records produce a recoverable loading error instead of a blank screen. The build removes obsolete output assets after validating its inputs. Original source downloads remain byte-identical.
 
@@ -142,6 +142,18 @@ Each normalized variant includes `numberSubmitters`: sorted distinct, nonnegativ
 
 Filtered CSV export includes all matching pages and retains c./p. HGVS, clinical significance, exact review status, submitter counts, domain overlaps, inclusive protein positions, ClinVar ID/URL, conditions, genomic coordinates, evaluation dates, source lines/hashes, snapshot dates and mapping provenance. No new remote data source or runtime request was added.
 
+
+## Independent AlphaFold fragments
+
+The primary protein viewer now loads original predicted atomic coordinates with a lazy-loaded, locally bundled 3Dmol.js viewer. It offers thin backbone, atoms/bonds and van der Waals surface representations; confidence or chain colors; drag rotation, wheel zoom, panning, keyboard controls, and canonical-residue selection. The whole-protein schematic remains a separate overview. No coordinates are stitched together or invented outside a fragment.
+
+Two seed-11, top-ranked AlphaFold Server models are bundled: the NC1 vWFA2-containing fragment at **1047–1237** (one chain, pTM 0.91) and a collagenous fragment at **2539–2619** (three identical chains, ipTM 0.52). The latter's chain arrangement is uncertain and its input contains no hydroxyproline modifications. The first model includes flanking residues around the unchanged UniProt VWFA2 annotation, **1054–1229**. These are wild-type predictions, not predictions of individual variant effects. Local pLDDT does not establish inter-chain accuracy or clinical significance.
+
+Every click and hover maps model residue 1 back to the fragment's canonical start. Clicks and the accessible residue input select a global residue range; this clears the previous global domain focus while retaining other evidence/column filters. The model selector itself does not alter the cohort. A selected map interval outside a model is explicitly identified as unavailable. Residue evidence is docked below the structure, not over neighboring atoms.
+
+Original mmCIF, job inputs and summary-confidence files are downloadable. `public/data/structures/manifest.json` records reference identity, file hashes, chains, confidence, residue mappings, original archive filenames and model provenance. Preparation can be reproduced with `scripts/prepare_structures.py`; its README documents original archives and output terms. AlphaFold Server output is subject to its non-commercial terms, with original notices preserved. 3Dmol.js 2.5.5 is BSD-3-Clause licensed and appears in the generated third-party licenses file. Structure coordinates and renderer assets are served locally; no new API or hosted data service is used.
+
+Scientific regression tests check complete per-chain atom/residue coverage, exact canonical sequence identity, source hashes, reported confidence and separation of fragment/domain boundaries. The build validates the manifest and download hashes before creating assets. Surface generation is on-demand and local; no CSP relaxations were introduced.
 
 ## Coordinated exploration and shareable evidence
 

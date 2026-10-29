@@ -1,0 +1,18 @@
+[{
+ "name": "COL7A1_collagen_WT_2539_2619_seed11",
+ "modelSeeds": [
+  "11"
+ ],
+ "sequences": [
+  {
+   "proteinChain": {
+    "sequence": "GERGPRGLDGDKGPRGDNGDPGDKGSKGEPGDKGSAGLPGLRGLLGPQGQPGAAGIPGDPGSPGKDGVPGIRGEKGDVGFM",
+    "count": 3,
+    "useStructureTemplate": true
+   }
+  }
+ ],
+ "dialect": "alphafoldserver",
+ "version": 3
+}
+]

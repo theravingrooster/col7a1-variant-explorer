@@ -13,6 +13,7 @@ import { classificationSummary } from "../src/chart-data.mjs";
 // BASE_URL can point to a deployed preview or production site for a smoke audit.
 const baseURL = process.env.BASE_URL || "http://127.0.0.1:3000";
 const source = JSON.parse(await readFile(new URL("../public/data/variants.json", import.meta.url)));
+const structures = JSON.parse(await readFile(new URL("../public/data/structures/manifest.json", import.meta.url)));
 let browser, context, page, errors;
 const search = () => page.getByRole("searchbox", { name: "Search variants" });
 const tableRows = () => page.locator("tbody tr");
@@ -69,6 +70,21 @@ async function expectNoPageOverflow() {
   }));
   assert.ok(dimensions.page <= dimensions.viewport + 1,
     `Document overflows: ${JSON.stringify(dimensions)}`);
+}
+async function openProteinOverview() {
+  await page.getByRole("button", { name: "Whole-protein overview", exact: true }).click();
+  await page.getByRole("region", { name: "Collagen VII schematic", exact: true }).waitFor({ state: "visible" });
+}
+async function expectFragmentReady(fragment) {
+  await page.waitForFunction(id => {
+    const stage = document.querySelector(".fragment-stage"), host = document.querySelector(".fragment-canvas");
+    return stage?.dataset.modelStatus === "ready" && stage.dataset.fragment === id && host?.dataset.fragmentId === id && host.querySelector("canvas")?.width > 0;
+  }, fragment.id);
+  assert.equal(Number(await page.locator(".fragment-canvas").getAttribute("data-atom-count")), fragment.atomCount);
+}
+async function chooseFragment(fragment) {
+  await page.getByRole("group", { name: "Choose a predicted fragment", exact: true }).getByRole("button", { name: new RegExp(fragment.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+  await expectFragmentReady(fragment);
 }
 const proteinSchematic = () => page.getByRole("region", { name: "Collagen VII schematic", exact: true });
 const proteinCanvas = () => page.getByRole("group", { name: "Interactive 3D collagen VII schematic", exact: true });
@@ -342,6 +358,7 @@ test("theme initially follows system preference until the user chooses a mode", 
 });
 
 test("protein map leads the charts and table, with domain and keyboard range selection", async () => {
+  await openProteinOverview();
   const order = await page.evaluate(() => {
     const map = document.querySelector(".protein-panel"), summary = document.querySelector(".summary-panel"), table = document.querySelector(".table-panel");
     return {
@@ -582,6 +599,7 @@ test("map evidence stays below the chart while adjacent density bars remain reac
 });
 
 test("protein and residue views share hover, keyboard focus and selected-region filters", async () => {
+  await openProteinOverview();
   const schematic = page.getByRole("region", { name: "Collagen VII schematic", exact: true });
   const nc2 = source.protein.domains.find(d => d.label === "NC2");
   const subdomain = source.protein.domains.find(d => d.level === "subdomain");
@@ -634,10 +652,11 @@ test("protein and residue views share hover, keyboard focus and selected-region 
   const signal = source.protein.domains.find(d => d.label === "Signal peptide");
   await page.getByRole("button", { name: `Filter ${signal.label}, amino acids ${signal.start} to ${signal.end}`, exact: true }).focus();
   await page.waitForFunction(() => document.querySelector(".schematic-context")?.textContent.includes("precursor only; not shown"));
-  assert.match(await schematic.innerText(), /not a resolved structure/);
+  assert.match(await schematic.innerText(), /not an experimental or AlphaFold structure/);
 });
 
 test("3D protein controls support keyboard rotation, pan, zoom and reset without changing filters", async () => {
+  await openProteinOverview();
   const schematic = proteinSchematic(), canvas = proteinCanvas();
   const nc2 = source.protein.domains.find(domain => domain.label === "NC2");
   await schematic.getByRole("button", { name: "Select NC2 on protein schematic", exact: true }).click();
@@ -668,6 +687,7 @@ test("3D protein controls support keyboard rotation, pan, zoom and reset without
 });
 
 test("automatic protein rotation is optional and a new reduced-motion preference pauses it", async () => {
+  await openProteinOverview();
   const schematic = proteinSchematic(), canvas = proteinCanvas();
   await schematic.scrollIntoViewIfNeeded();
   assert.equal(await schematic.getAttribute("data-rotating"), "false");
@@ -690,11 +710,13 @@ test("automatic protein rotation is optional and a new reduced-motion preference
   assert.equal(await schematic.getAttribute("data-rotating"), "false");
   await page.reload({ waitUntil: "networkidle" });
   await expectCount(source.summary.variants);
+  await openProteinOverview();
   assert.equal(await schematic.getAttribute("data-rotating"), "false");
   assert.equal(await schematic.getByRole("button", { name: "Start protein rotation", exact: true }).isVisible(), true);
 });
 
 test("horizontal, vertical and diagonal protein drags rotate geometry without filtering and preserve projected hit targets", async () => {
+  await openProteinOverview();
   const schematic = proteinSchematic(), canvas = proteinCanvas();
   const nc1 = source.protein.domains.find(domain => domain.label === "NC1");
   const nc2 = source.protein.domains.find(domain => domain.label === "NC2");
@@ -737,6 +759,7 @@ test("horizontal, vertical and diagonal protein drags rotate geometry without fi
 });
 
 test("wheel, zoom buttons and Ctrl/right-button pan change only the protein view and reset preserves filters", async () => {
+  await openProteinOverview();
   const schematic = proteinSchematic(), canvas = proteinCanvas();
   await query("id:17423", 1);
   const filteredURL = page.url(), initial = await proteinView();
@@ -775,6 +798,7 @@ test("wheel, zoom buttons and Ctrl/right-button pan change only the protein view
 });
 
 test("a one-finger vertical touch rotates the protein without scrolling or selecting a domain", async () => {
+  await openProteinOverview();
   const schematic = proteinSchematic(), canvas = proteinCanvas();
   await canvas.scrollIntoViewIfNeeded();
   assert.equal(await canvas.evaluate(node => getComputedStyle(node).touchAction), "none");
@@ -797,6 +821,103 @@ test("a one-finger vertical touch rotates the protein without scrolling or selec
   assert.equal(await page.evaluate(() => window.scrollY), pageScroll, "The canvas owns touch rotation; page scrolling remains outside it");
   assert.equal(page.url(), initialURL);
   await expectCount(source.summary.variants);
+});
+
+test("AlphaFold fragments load independent atomic models with exact coverage, confidence and original downloads", async () => {
+  const [vwfa2, collagen] = structures.fragments;
+  assert.equal(await page.getByRole("button", { name: "AlphaFold fragments", exact: true }).getAttribute("aria-pressed"), "true");
+  await expectFragmentReady(vwfa2);
+  assert.match(await page.locator(".fragment-coverage-label").innerText(), /191 of 2,944 sequence positions/);
+  assert.match(await page.locator(".fragment-coverage-label").innerText(), /not joined/);
+  assert.equal(await page.getByRole("img", { name: `Modeled coverage: residues ${vwfa2.start} through ${vwfa2.end} of ${source.protein.length}`, exact: true }).isVisible(), true);
+  assert.match(await page.locator(".fragment-confidence-note").innerText(), /not an experimental structure/);
+  const originalURL = page.url();
+  await chooseFragment(collagen);
+  assert.match(await page.locator(".fragment-coverage-label").innerText(), /81 of 2,944 sequence positions/);
+  assert.match(await page.locator(".fragment-coverage-label").innerText(), /Three copies/);
+  assert.match(await page.locator(".fragment-confidence-note").innerText(), /ipTM 0\.52/);
+  assert.match(await page.locator(".fragment-confidence-note").innerText(), /not established/);
+  assert.equal(page.url(), originalURL, "Changing the inspected model does not change the variant cohort");
+  await expectCount(source.summary.variants);
+  await page.getByRole("combobox", { name: "Structure coloring", exact: true }).selectOption("chain");
+  await page.waitForFunction(() => document.querySelector(".fragment-canvas")?.dataset.colorMode === "chain");
+  const legend = page.getByLabel("Protein chain color legend", { exact: true });
+  for (const chain of collagen.chains) assert.match(await legend.innerText(), new RegExp(`Chain ${chain}`));
+  for (const representation of ["sticks", "surface", "backbone"]) {
+    await page.getByRole("combobox", { name: "Structure representation", exact: true }).selectOption(representation);
+    await page.waitForFunction(value => document.querySelector(".fragment-canvas")?.dataset.representation === value, representation);
+  }
+  await page.getByText("Model provenance, confidence & downloads", { exact: true }).click();
+  assert.equal(await page.getByRole("link", { name: "Original mmCIF", exact: true }).getAttribute("href"), collagen.coordinateUrl);
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Original mmCIF", exact: true }).click();
+  const download = await downloadPromise;
+  assert.equal(createHash("sha256").update(await readFile(await download.path())).digest("hex"), collagen.coordinateSha256,
+    "The downloaded coordinates are the unmodified original AlphaFold output");
+  await chooseFragment(vwfa2);
+  assert.equal(await page.locator(".fragment-canvas canvas").count(), 1, "Switching fragments reuses one molecular canvas");
+});
+
+test("fragment residue selection uses canonical positions and preserves its cohort across overview switches", async () => {
+  const fragment = structures.fragments[0];
+  await expectFragmentReady(fragment);
+  const candidate = source.variants.find(v => v.proteinMapping.status === "mapped" && v.proteinMapping.start >= fragment.start && v.proteinMapping.start <= fragment.end);
+  assert.ok(candidate, "The fragment includes at least one mapped variant for the interaction test");
+  const position = candidate.proteinMapping.start;
+  const expected = filterVariants(source.variants, { ...EMPTY_FILTERS, range: [position, position] });
+  const positionField = page.getByRole("textbox", { name: "Fragment amino acid position", exact: true });
+  const originalURL = page.url();
+  await positionField.fill(String(fragment.end + 1));
+  await page.getByRole("button", { name: "Select residue", exact: true }).click();
+  assert.match(await page.locator(".fragment-position-form [role=alert]").innerText(), /Choose a modeled residue/);
+  assert.equal(page.url(), originalURL, "An out-of-fragment residue cannot invent a mapping or change filters");
+  await positionField.fill(String(position));
+  await page.getByRole("button", { name: "Select residue", exact: true }).click();
+  await expectCount(expected.length);
+  assert.equal(new URL(page.url()).searchParams.get("range"), `${position}-${position}`);
+  await page.waitForFunction(value => document.querySelector(".fragment-canvas")?.dataset.highlightedRange === `${value}-${value}`, position);
+  assert.match(await page.locator(".fragment-inspector").innerText(), new RegExp(`Model residue ${position - fragment.start + 1}`));
+  const selectedURL = page.url();
+  await openProteinOverview();
+  await expectCount(expected.length);
+  assert.equal(page.url(), selectedURL);
+  await page.getByRole("button", { name: "AlphaFold fragments", exact: true }).click();
+  await expectFragmentReady(fragment);
+  assert.equal(page.url(), selectedURL);
+  await page.getByRole("button", { name: "Reset structure view", exact: true }).click();
+  await expectCount(expected.length);
+  assert.equal(page.url(), selectedURL, "Resetting the molecular camera does not reset the research cohort");
+  await page.getByRole("button", { name: "Show variants in this fragment", exact: true }).click();
+  await expectCount(filterVariants(source.variants, { ...EMPTY_FILTERS, range: [fragment.start, fragment.end] }).length);
+  await resetAll().click();
+  const nc2 = source.protein.domains.find(domain => domain.label === "NC2");
+  await page.getByRole("button", { name: `Filter NC2, amino acids ${nc2.start} to ${nc2.end}`, exact: true }).click();
+  await expectCount(filterVariants(source.variants, { ...EMPTY_FILTERS, domain: nc2.id }).length);
+  assert.match(await page.locator(".fragment-linked-note").innerText(), /outside this fragment/);
+  await page.waitForFunction(() => document.querySelector(".fragment-canvas")?.dataset.highlightedRange === "");
+  for (const width of [768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expectNoPageOverflow();
+    const stage = await page.locator(".fragment-stage").boundingBox();
+    const residues = await page.locator(".residue-workspace").boundingBox();
+    assert.ok(stage.y + stage.height < residues.y, "The fragment remains above the residue map");
+  }
+});
+
+test("switching fragments clears the old geometry before new coordinates arrive", async () => {
+  const [first, second] = structures.fragments;
+  await expectFragmentReady(first);
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route(`**${second.coordinateUrl}`, async route => { await gate; await route.continue(); });
+  try {
+    await page.getByRole("group", { name: "Choose a predicted fragment", exact: true }).getByRole("button", { name: new RegExp(second.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await page.waitForFunction(id => document.querySelector(".fragment-stage")?.dataset.fragment === id && document.querySelector(".fragment-stage")?.dataset.modelStatus === "loading", second.id);
+    await page.waitForFunction(() => !document.querySelector(".fragment-canvas")?.dataset.fragmentId);
+    assert.equal(await page.getByRole("button", { name: "Reset structure view", exact: true }).isDisabled(), true);
+    await expectCount(source.summary.variants);
+  } finally { release(); }
+  await expectFragmentReady(second);
 });
 
 test("the consensus preset uses exact review status and keeps graphs and evidence in sync", async () => {

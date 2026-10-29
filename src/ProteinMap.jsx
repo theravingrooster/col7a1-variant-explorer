@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { GROUPS, formatNumber as num, positionLabel } from "./data-utils.mjs";
 import { densityBins, mapWindow, variantsInWindow, markerLayout, validMapRange, mapTicks, MAP_GROUPS, MARKER_LIMIT, regionEvidence } from "./map-data.mjs";
-import ProteinSchematic from "./ProteinSchematic.jsx";
+import ProteinStructureExplorer from "./ProteinStructureExplorer.jsx";
 import "./protein-map.css";
 
 const X = 42, WIDTH = 816, PLOT_TOP = 174;
@@ -147,8 +147,9 @@ export default function ProteinMap({ protein, variants, filters, onFilter, selec
       <a href={protein.url} target="_blank" rel="noreferrer" className="text-link">UniProt Q02388 <span aria-hidden="true">↗</span></a>
     </div>
     <div className="protein-explorer-grid">
-      <ProteinSchematic protein={protein} activeRange={activeRange} selectedDomain={filters.domain}
-        onRegionHover={domain => { clearTimeout(hideTimer.current); setHovered(null); setSchematicHover(domain); }} onRegionSelect={chooseDomain} />
+      <ProteinStructureExplorer protein={protein} variants={variants} activeRange={activeRange} selectedDomain={filters.domain}
+        onRegionHover={domain => { clearTimeout(hideTimer.current); setHovered(null); setSchematicHover(domain); }} onRegionSelect={chooseDomain}
+        onRangeSelect={nextRange => { setHovered(null); setSchematicHover(null); onFilter("domain", ""); onFilter("range", nextRange); setModePreference("auto"); }} />
       <div className="residue-workspace" onMouseEnter={() => clearTimeout(hideTimer.current)} onMouseLeave={hideAfterPointerLeaves}>
         <div className="residue-heading"><div><h3>Residue map</h3><p>{selectedRegion?.label || (zoomed ? "Selected range" : "Full protein")} <span>· aa {num(start)}–{num(end)}</span></p></div>
           {zoomed && <button className="text-button" onClick={resetRegion}>Reset map region</button>}

@@ -90,11 +90,12 @@ function Sources({ data }) {
       </summary>
       <div className="sources-content">
         <p>
-          All records come from the supplied local files. No live queries or
+          Variant records come from the supplied ClinVar and UniProt files. No live queries or
           external assets are used. ClinVar’s release date is not present in the
           source; the UniProt annotation update is{" "}
           {data.protein.entryAudit.lastAnnotationUpdateDate}.
         </p>
+        <p>The separate AlphaFold fragment viewer uses two supplied AlphaFold Server prediction files. Each model has explicit residue coverage, chain counts, confidence and original downloads in its provenance panel. These fragments are not joined into a whole protein and do not change variant classifications. <a href="/data/structures/manifest.json">Fragment mapping and source hashes</a>.</p>
         <div className="source-cards">
           {Object.entries(data.sources).map(([key, source]) => (
             <div key={key}>
